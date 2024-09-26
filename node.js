@@ -1,70 +1,51 @@
-const QRCode = require('qrcode');
-const opn = require('opn');
-const fs = require('fs');
-let express = require('express');
-let cors = require('cors');
-let app = express();
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const express = require('express');
+const cors = require('cors');
 const https = require('https');
-const publicIp = require('ip');
-const forge = require('node-forge');
-const os = require('os');
-
-
-
-
-const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const forge = require('node-forge');
 
+const app = express();
 
-// Set up storage for uploaded files
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/') // Make sure this folder exists
-    },
-    filename: function (req, file, cb) {
-        // Preserve the original extension and use a timestamp to ensure uniqueness
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname))
-    }
-});
-
-// Create the multer instance
-const upload = multer({ storage: storage });
-
-// Add this route to handle file uploads
-app.post('/upload', upload.single('file-upload'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file was uploaded.' });
-    }
-
-    // Send back the filename so it can be used for downloading
-    res.json({ 
-        message: 'File uploaded successfully', 
-        filename: req.file.filename,
-        originalName: req.file.originalname
-    });
-});
-
-
-
-
-
+// Middleware
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-
-
-
-function generateRandomNumber() {
-  return Math.floor(Math.random() * 1000000); // Generates a random number between 0 and 999999
+// JWT Secret Setup
+function setupJWTSecret() {
+  const jwtKeyPath = 'jwt.key';
+  if (!fs.existsSync(jwtKeyPath)) {
+    const jwtSecret = crypto.randomBytes(64).toString('hex');
+    fs.writeFileSync(jwtKeyPath, jwtSecret, 'utf8');
+    console.log('New JWT secret generated and saved to jwt.key');
+    return jwtSecret;
+  }
+  console.log('Reading JWT secret from jwt.key file...');
+  return fs.readFileSync(jwtKeyPath, 'utf8');
 }
 
+const JWT_SECRET = setupJWTSecret();
 
+// File Upload Setup
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname))
+  }
+});
 
+const upload = multer({ storage: storage });
+
+// SSL Certificate Generation
 function generateSelfSignedCertificate() {
   const pki = forge.pki;
   const keys = pki.rsa.generateKeyPair(2048);
@@ -105,23 +86,53 @@ function generateSelfSignedCertificate() {
   };
 }
 
+const sslCert = generateSelfSignedCertificate();
+fs.writeFileSync('server.crt', sslCert.cert);
+fs.writeFileSync('server.key', sslCert.privateKey);
+
+const httpsOptions = {
+  key: sslCert.privateKey,
+  cert: sslCert.cert
+};
+
+// Helper Functions
+function generateToken(ip) {
+  return jwt.sign({ ip }, JWT_SECRET);
+}
+
+function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
+  }
+}
 
 function getPublicIP() {
   return new Promise((resolve, reject) => {
     https.get('https://api.ipify.org', (res) => {
       let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve(data);
-      });
-    }).on('error', (err) => {
-      reject(err);
-    });
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve(data));
+    }).on('error', (err) => reject(err));
   });
 }
 
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.post('/upload', upload.single('file-upload'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file was uploaded.' });
+  }
+  res.json({ 
+    message: 'File uploaded successfully', 
+    filename: req.file.filename,
+    originalName: req.file.originalname
+  });
+});
 
 app.get('/getPublicIPAndParam', (req, res) => {
   getPublicIP().then((ip) => {
@@ -135,117 +146,45 @@ app.get('/getPublicIPAndParam', (req, res) => {
   });
 });
 
+// Authentication Middleware
+const customUrlParam = Math.floor(Math.random() * 1000000);
 
+const readline = require('readline');
 
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
 
+function promptForAccess(ip) {
+  return new Promise((resolve) => {
+    rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+}
 
-
-
-const sslCert = generateSelfSignedCertificate();
-
-// Write the certificate and key to files
-fs.writeFileSync('server.crt', sslCert.cert);
-fs.writeFileSync('server.key', sslCert.privateKey);
-
-const httpsOptions = {
-  key: sslCert.privateKey,
-  cert: sslCert.cert
-};
-
-
-
-
-
-const customUrlParam = generateRandomNumber();
-
-
-
-
-
-
-app.use((req, res, next) => {
- const uploads = req.path === '/uploads/uploads.html'; 
- //const isTestchainPage = req.path === '/testchain/testchain.html';
+app.use(async (req, res, next) => {
+  const uploads = req.path === '/uploads/uploads.html'; 
   const providedKey = req.query.key;
+  const clientIP = req.ip;
 
-  if (providedKey === customUrlParam.toString() || (uploads && providedKey === customUrlParam.toString())
- // (isTestchainPage && providedKey === customUrlParam.toString())
-) {
+  if (providedKey === customUrlParam.toString() || (uploads && providedKey === customUrlParam.toString())) {
     next();
   } else {
-    return res.status(403).send('Access Denied');
+    console.log(`User visited from IP: ${clientIP}`);
+    const allow = await promptForAccess(clientIP);
+    if (allow) {
+      next();
+    } else {
+      return res.status(403).send('Access Denied');
+    }
   }
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-
-
-/*
-app.get('/testchain.html', (req, res) => {
-  const filePath = path.join(__dirname, 'testchain.html');
-  console.log('Attempting to serve file:', filePath);
-  res.sendFile(filePath);
-});
-
-
-// Proxy requests to /testchain to the testchain application
-app.use('/testchain', createProxyMiddleware({ 
-  target: 'http://localhost:3001', 
-  changeOrigin: true,
-  pathRewrite: {'^/testchain/api' : ''}
-}));
-
-// Your existing route handlers...
-
-// Start the testchain application
-const testchainApp = require('./testchain/testchain');
-testchainApp.listen(3001, () => {
-  console.log('Testchain app listening on port 3001');
-});
-
-
-
-*/
-
-
-
-
-app.get('/uploads.html', (req, res) => {
-  const filePath = path.join(__dirname, 'uploads.html');
-  console.log('Attempting to serve file:', filePath);
-  res.sendFile(filePath);
-});
-
-
-// Proxy requests to /testchain to the testchain application
-app.use('/uploads', createProxyMiddleware({ 
-  target: 'http://localhost:3002', 
-  changeOrigin: true,
-  pathRewrite: {'^/uploads/api' : ''}
-}));
-
-// Your existing route handlers...
-
-// Start the testchain application
-const uploadsApp = require('./uploads/uploads');
-uploadsApp.listen(3002, () => {
-  console.log('uploads app listening on port 3002');
-});
-
-
-
-
-
-
-
-
-
-// Start the main server
+// Start Server
 getPublicIP().then((ip) => {
-  const port = 443; // or 3000 if not running as root
+  const port = 443;
   const server = https.createServer(httpsOptions, app);
   server.listen(port, () => {
     console.log(`HTTPS Server running at https://${ip}:${port}/?key=${customUrlParam}`);
@@ -254,8 +193,3 @@ getPublicIP().then((ip) => {
 }).catch((err) => {
   console.error('Error getting public IP:', err);
 });
-
-
-
-// Add this line to serve static files from the Thunder folder
-//app.use('/thunder', express.static(path.join(__dirname, 'thunder')));
