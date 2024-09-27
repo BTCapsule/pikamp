@@ -28,22 +28,18 @@
         <h1>Waiting for Confirmation</h1>
         <p>Please wait while your access is being confirmed.</p>
     </div>
-    <script>
-        function checkAccess() {
-            fetch('/main')
-                .then(response => {
-                    if (response.ok) {
-                        window.location.href = '/main';
-                    } else {
-                        setTimeout(checkAccess, 5000); // Check again after 5 seconds
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    setTimeout(checkAccess, 5000); // Check again after 5 seconds
-                });
+
+<script>
+    function checkAccess() {
+        // Check if the secret cookie exists
+        if (document.cookie.includes('secret=')) {
+            window.location.href = '/main';
+        } else {
+            setTimeout(checkAccess, 5000); // Check again after 5 seconds
         }
-        checkAccess();
-    </script>
+    }
+    checkAccess();
+</script>
+
 </body>
 </html>
