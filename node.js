@@ -10,6 +10,10 @@ const forge = require('node-forge');
 
 const app = express();
 
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
+
 // Middleware
 app.use(cors({
   origin: '*',
@@ -17,20 +21,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// JWT Secret Setup
-function setupJWTSecret() {
-  const jwtKeyPath = 'jwt.key';
-  if (!fs.existsSync(jwtKeyPath)) {
-    const jwtSecret = crypto.randomBytes(64).toString('hex');
-    fs.writeFileSync(jwtKeyPath, jwtSecret, 'utf8');
-    console.log('New JWT secret generated and saved to jwt.key');
-    return jwtSecret;
-  }
-  console.log('Reading JWT secret from jwt.key file...');
-  return fs.readFileSync(jwtKeyPath, 'utf8');
-}
-
-const JWT_SECRET = setupJWTSecret();
 
 // File Upload Setup
 const storage = multer.diskStorage({
@@ -95,13 +85,13 @@ const httpsOptions = {
   cert: sslCert.cert
 };
 
-function generateToken(ip) {
+/*function generateToken(ip) {
   return jwt.sign({ ip }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
-}
+}*/
 
 function getPublicIP() {
   return new Promise((resolve, reject) => {
@@ -113,10 +103,6 @@ function getPublicIP() {
   });
 }
 
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 app.post('/upload', upload.single('file-upload'), (req, res) => {
   if (!req.file) {
@@ -160,44 +146,68 @@ function promptForAccess(ip) {
 
 
 
+
+function setupSecret() {
+  const secretKeyPath = 'secret.key';
+  if (!fs.existsSync(secretKeyPath)) {
+    const secret = crypto.randomBytes(64).toString('hex');
+    fs.writeFileSync(secretKeyPath, secret, 'utf8');
+    console.log('New secret generated and saved to secret.key');
+    return secret;
+  }
+  console.log('Reading secret from secret.key file...');
+  return fs.readFileSync(secretKeyPath, 'utf8').trim();
+}
+
+
+
+
+
+
 let accessGranted = false;
 
-
-
-// Modify your middleware
 app.use(async (req, res, next) => {
-  const providedKey = req.query.key;
-  const clientIP = req.ip;
+  try {
+    const clientIP = req.ip;
+    const clientSecret = req.cookies.secret;
 
-  if (accessGranted) {
-    next();
-  } else {
+    if (accessGranted && clientSecret) {
+      const storedSecret = fs.readFileSync('secret.key', 'utf8').trim();
+      if (clientSecret === storedSecret) {
+        return next();
+      }
+    }
+
     console.log(`User visited from IP: ${clientIP}`);
     const allow = await promptForAccess(clientIP);
     if (allow) {
       accessGranted = true;
-      next();
+      const secret = setupSecret();
+      res.cookie('secret', secret, { httpOnly: true, secure: true, maxAge: 3600000 }); // 1 hour expiry
+      res.redirect('/main');
     } else {
-      return res.status(403).send('Access Denied');
+      res.status(403).send('Access Denied');
     }
+  } catch (error) {
+    console.error('Error in middleware:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
-// Add an explicit route for /main
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.get('/main', (req, res) => {
-  if (accessGranted) {
+  const clientSecret = req.cookies.secret;
+  const storedSecret = fs.readFileSync('secret.key', 'utf8').trim();
+  
+  if (clientSecret && clientSecret === storedSecret) {
     res.sendFile(path.join(__dirname, 'main.html'));
   } else {
-    res.status(403).send('Access Denied');
+    res.redirect('/');
   }
 });
-
-
-
-
-
-
-
 
 
 
