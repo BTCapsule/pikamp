@@ -118,34 +118,18 @@ fileInput.addEventListener('change', function(e) {
     }
 });
 </script>
-
 <script>
     function checkAccess() {
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-            window.location.href = '/'; // Redirect to index if no token
-            return;
+        // Check if the secret cookie exists
+        if (!document.cookie.includes('secret=')) {
+            window.location.href = '/'; // Redirect to index if no secret cookie
         }
-
-        const headers = { 'Authorization': `Bearer ${token}` };
-        
-        fetch('/main', { headers })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Access denied');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                localStorage.removeItem('accessToken');
-                window.location.href = '/'; // Redirect to index on error
-            });
     }
 
     // Check access when the page loads
     checkAccess();
 
-    // Modify the existing XMLHttpRequest to include the token
+    // Modify the existing XMLHttpRequest to include the cookie
     document.getElementById('upload-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -155,17 +139,9 @@ fileInput.addEventListener('change', function(e) {
         
         xhr.open('POST', '/upload', true);
         
-        // Add the token to the request headers
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        }
 
-        // ... (rest of the existing XMLHttpRequest code)
     });
 </script>
-
-
 
 </body>
 </html>
