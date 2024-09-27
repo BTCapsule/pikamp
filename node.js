@@ -95,17 +95,12 @@ const httpsOptions = {
   cert: sslCert.cert
 };
 
-// Helper Functions
 function generateToken(ip) {
-  return jwt.sign({ ip }, JWT_SECRET);
+  return jwt.sign({ ip }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function verifyToken(token) {
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return null;
-  }
+  return jwt.verify(token, JWT_SECRET);
 }
 
 function getPublicIP() {
@@ -138,7 +133,7 @@ app.get('/getPublicIPAndParam', (req, res) => {
   getPublicIP().then((ip) => {
     res.json({
       publicIP: ip,
-      customUrlParam: customUrlParam
+      
     });
   }).catch((err) => {
     console.error('Error getting public IP:', err);
@@ -146,8 +141,7 @@ app.get('/getPublicIPAndParam', (req, res) => {
   });
 });
 
-// Authentication Middleware
-const customUrlParam = Math.floor(Math.random() * 1000000);
+
 
 const readline = require('readline');
 
@@ -164,17 +158,24 @@ function promptForAccess(ip) {
   });
 }
 
+
+
+let accessGranted = false;
+
+
+
+// Modify your middleware
 app.use(async (req, res, next) => {
-  const uploads = req.path === '/uploads/uploads.html'; 
   const providedKey = req.query.key;
   const clientIP = req.ip;
 
-  if (providedKey === customUrlParam.toString() || (uploads && providedKey === customUrlParam.toString())) {
+  if (accessGranted) {
     next();
   } else {
     console.log(`User visited from IP: ${clientIP}`);
     const allow = await promptForAccess(clientIP);
     if (allow) {
+      accessGranted = true;
       next();
     } else {
       return res.status(403).send('Access Denied');
@@ -182,12 +183,30 @@ app.use(async (req, res, next) => {
   }
 });
 
+// Add an explicit route for /main
+app.get('/main', (req, res) => {
+  if (accessGranted) {
+    res.sendFile(path.join(__dirname, 'main.html'));
+  } else {
+    res.status(403).send('Access Denied');
+  }
+});
+
+
+
+
+
+
+
+
+
+
 // Start Server
 getPublicIP().then((ip) => {
   const port = 443;
   const server = https.createServer(httpsOptions, app);
   server.listen(port, () => {
-    console.log(`HTTPS Server running at https://${ip}:${port}/?key=${customUrlParam}`);
+    console.log(`HTTPS Server running at https://${ip}:${port}/`);
     console.log(`Access this URL on your phone's browser`);
   });
 }).catch((err) => {
