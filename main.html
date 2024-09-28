@@ -69,6 +69,37 @@
 
 
 <script>
+
+
+
+
+
+
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function checkAccess() {
+        const secretCookie = getCookie('secret');
+        if (!secretCookie) {
+            window.location.href = '/';
+        }
+    }
+
+    // Check access when the page loads
+    checkAccess();
+
+
+
+
+
+
+
+
+
 document.getElementById('upload-form').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -118,30 +149,7 @@ fileInput.addEventListener('change', function(e) {
     }
 });
 </script>
-<script>
-    function checkAccess() {
-        // Check if the secret cookie exists
-        if (!document.cookie.includes('secret=')) {
-            window.location.href = '/'; // Redirect to index if no secret cookie
-        }
-    }
 
-    // Check access when the page loads
-    checkAccess();
-
-    // Modify the existing XMLHttpRequest to include the cookie
-    document.getElementById('upload-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        var formData = new FormData(this);
-        var xhr = new XMLHttpRequest();
-        var progressBar = document.getElementById('upload-progress');
-        
-        xhr.open('POST', '/upload', true);
-        
-
-    });
-</script>
 
 </body>
 </html>
