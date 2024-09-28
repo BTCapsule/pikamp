@@ -85,13 +85,10 @@ const httpsOptions = {
   cert: sslCert.cert
 };
 
-/*function generateToken(ip) {
-  return jwt.sign({ ip }, JWT_SECRET, { expiresIn: '1h' });
-}
 
-function verifyToken(token) {
-  return jwt.verify(token, JWT_SECRET);
-}*/
+
+
+
 
 function getPublicIP() {
   return new Promise((resolve, reject) => {
@@ -104,6 +101,13 @@ function getPublicIP() {
 }
 
 
+
+
+
+
+
+
+/*
 app.post('/upload', upload.single('file-upload'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file was uploaded.' });
@@ -126,11 +130,44 @@ app.get('/getPublicIPAndParam', (req, res) => {
     res.status(500).json({ error: 'Failed to get public IP' });
   });
 });
+*/
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+function generateHash() {
+  return crypto.createHash('sha256').update(crypto.randomBytes(64)).digest('hex');
+}
+
+function getSecretFiles() {
+  return fs.readdirSync(__dirname).filter(file => file.endsWith('.secret'));
+}
+
+function createNewSecretFile(hash) {
+  const files = getSecretFiles();
+  const newUserNumber = files.length > 0 ? 
+    Math.max(...files.map(f => parseInt(f.match(/\d+/)[0]))) + 1 : 1;
+  const fileName = `user${newUserNumber}.secret`;
+  fs.writeFileSync(fileName, hash);
+  return hash;
+}
+
+function checkHash(hash) {
+  const files = getSecretFiles();
+  return files.some(file => fs.readFileSync(file, 'utf8').trim() === hash);
+}
 
 const readline = require('readline');
-
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -144,53 +181,28 @@ function promptForAccess(ip) {
   });
 }
 
-
-
-
-function setupSecret() {
-  const secretKeyPath = 'secret.key';
-  if (!fs.existsSync(secretKeyPath)) {
-    const secret = crypto.randomBytes(64).toString('hex');
-    fs.writeFileSync(secretKeyPath, secret, 'utf8');
-    console.log('New secret generated and saved to secret.key');
-    return secret;
-  }
-  console.log('Reading secret from secret.key file...');
-  return fs.readFileSync(secretKeyPath, 'utf8').trim();
-}
-
-
-
-
-
-
-let accessGranted = false;
-
 app.use(async (req, res, next) => {
-  try {
-    const clientIP = req.ip;
-    const clientSecret = req.cookies.secret;
+  const clientIP = req.ip;
+  const clientHash = req.cookies.secret;
 
-    if (accessGranted && clientSecret) {
-      const storedSecret = fs.readFileSync('secret.key', 'utf8').trim();
-      if (clientSecret === storedSecret) {
-        return next();
-      }
-    }
+  if (clientHash && checkHash(clientHash)) {
+    return next();
+  }
 
-    console.log(`User visited from IP: ${clientIP}`);
-    const allow = await promptForAccess(clientIP);
-    if (allow) {
-      accessGranted = true;
-      const secret = setupSecret();
-      res.cookie('secret', secret, { httpOnly: true, secure: true, maxAge: 3600000 }); // 1 hour expiry
-      res.redirect('/main');
-    } else {
-      res.status(403).send('Access Denied');
-    }
-  } catch (error) {
-    console.error('Error in middleware:', error);
-    res.status(500).send('Internal Server Error');
+  if (req.path !== '/') {
+    return res.redirect('/');
+  }
+
+  console.log(`User visited from IP: ${clientIP}`);
+  const allow = await promptForAccess(clientIP);
+  
+  if (allow) {
+    const newHash = generateHash();
+    createNewSecretFile(newHash);
+    res.cookie('secret', newHash, { secure: true, maxAge: 3600000 }); // 1 hour expiry
+    return res.redirect('/main');
+  } else {
+    return res.status(403).send('Access Denied');
   }
 });
 
@@ -199,15 +211,19 @@ app.get('/', (req, res) => {
 });
 
 app.get('/main', (req, res) => {
-  const clientSecret = req.cookies.secret;
-  const storedSecret = fs.readFileSync('secret.key', 'utf8').trim();
+  const clientHash = req.cookies.secret;
   
-  if (clientSecret && clientSecret === storedSecret) {
+  if (clientHash && checkHash(clientHash)) {
     res.sendFile(path.join(__dirname, 'main.html'));
   } else {
     res.redirect('/');
   }
 });
+
+
+
+
+
 
 
 
