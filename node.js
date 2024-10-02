@@ -7,29 +7,25 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const forge = require('node-forge');
+const cookieParser = require('cookie-parser');
+const readline = require('readline');
 
 const app = express();
 
-const cookieParser = require('cookie-parser');
-app.use(cookieParser());
-
-
 // Middleware
+app.use(cookieParser());
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-
 // File Upload Setup
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/')
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname))
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
 
@@ -47,29 +43,19 @@ function generateSelfSignedCertificate() {
   cert.validity.notAfter = new Date();
   cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
-  const attrs = [{
-    name: 'commonName',
-    value: 'localhost'
-  }, {
-    name: 'countryName',
-    value: 'US'
-  }, {
-    shortName: 'ST',
-    value: 'Virginia'
-  }, {
-    name: 'localityName',
-    value: 'Blacksburg'
-  }, {
-    name: 'organizationName',
-    value: 'Test'
-  }, {
-    shortName: 'OU',
-    value: 'Test'
-  }];
+  const attrs = [
+    { name: 'commonName', value: 'localhost' },
+    { name: 'countryName', value: 'US' },
+    { shortName: 'ST', value: 'Virginia' },
+    { name: 'localityName', value: 'Blacksburg' },
+    { name: 'organizationName', value: 'Test' },
+    { shortName: 'OU', value: 'Test' }
+  ];
 
   cert.setSubject(attrs);
   cert.setIssuer(attrs);
   cert.sign(keys.privateKey);
+
   return {
     cert: pki.certificateToPem(cert),
     privateKey: pki.privateKeyToPem(keys.privateKey)
@@ -85,11 +71,7 @@ const httpsOptions = {
   cert: sslCert.cert
 };
 
-
-
-
-
-
+// Utility Functions
 function getPublicIP() {
   return new Promise((resolve, reject) => {
     https.get('https://api.ipify.org', (res) => {
@@ -100,74 +82,6 @@ function getPublicIP() {
   });
 }
 
-
-
-
-
-
-
-
-/*
-app.post('/upload', upload.single('file-upload'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file was uploaded.' });
-  }
-  res.json({ 
-    message: 'File uploaded successfully', 
-    filename: req.file.filename,
-    originalName: req.file.originalname
-  });
-});
-
-app.get('/getPublicIPAndParam', (req, res) => {
-  getPublicIP().then((ip) => {
-    res.json({
-      publicIP: ip,
-      
-    });
-  }).catch((err) => {
-    console.error('Error getting public IP:', err);
-    res.status(500).json({ error: 'Failed to get public IP' });
-  });
-});
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function generateHash() {
-  return crypto.createHash('sha256').update(crypto.randomBytes(64)).digest('hex');
-}
-
-function getSecretFiles() {
-  return fs.readdirSync(__dirname).filter(file => file.endsWith('.secret'));
-}
-
-function createNewSecretFile(hash) {
-  const files = getSecretFiles();
-  const newUserNumber = files.length > 0 ? 
-    Math.max(...files.map(f => parseInt(f.match(/\d+/)[0]))) + 1 : 1;
-  const fileName = `user${newUserNumber}.secret`;
-  fs.writeFileSync(fileName, hash);
-  return hash;
-}
-
-function checkHash(hash) {
-  const files = getSecretFiles();
-  return files.some(file => fs.readFileSync(file, 'utf8').trim() === hash);
-}
-
-const readline = require('readline');
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -181,11 +95,71 @@ function promptForAccess(ip) {
   });
 }
 
+function generateHash() {
+  return crypto.createHash('sha256').update(crypto.randomBytes(64)).digest('hex');
+}
+
+function encryptData(data, key) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key, 'hex'), iv);
+  let encrypted = cipher.update(data, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+function decryptData(data, key) {
+  const [ivHex, encryptedHex] = data.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const encryptedText = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), iv);
+  let decrypted = decipher.update(encryptedText);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString();
+}
+
+function getSecretFiles() {
+  return fs.readdirSync(__dirname).filter(file => file.endsWith('.secret'));
+}
+
+function createNewSecretFile(secretHash, encryptHash) {
+  const files = getSecretFiles();
+  const newUserNumber = files.length > 0 ? Math.max(...files.map(f => parseInt(f.match(/\d+/)[0]))) + 1 : 1;
+  const fileName = `user${newUserNumber}.secret`;
+  const encryptedContent = encryptData(secretHash, encryptHash);
+  fs.writeFileSync(fileName, encryptedContent);
+}
+
+function checkHash(secretHash, encryptHash) {
+  const files = getSecretFiles();
+  return files.some(file => {
+    try {
+      const encryptedContent = fs.readFileSync(file, 'utf8');
+      const decryptedContent = decryptData(encryptedContent, encryptHash);
+      return decryptedContent === secretHash;
+    } catch (error) {
+      console.error('Error checking hash:', error);
+      return false;
+    }
+  });
+}
+
+
+
+app.get('/auth-success', (req, res) => {
+  res.redirect('/main');
+});
+
+
+
+
+
+// Middleware for access control
 app.use(async (req, res, next) => {
   const clientIP = req.ip;
-  const clientHash = req.cookies.secret;
+  const clientSecretHash = req.cookies.secret;
+  const clientEncryptHash = req.cookies.encrypt;
 
-  if (clientHash && checkHash(clientHash)) {
+  if (clientSecretHash && clientEncryptHash && checkHash(clientSecretHash, clientEncryptHash)) {
     return next();
   }
 
@@ -195,46 +169,60 @@ app.use(async (req, res, next) => {
 
   console.log(`User visited from IP: ${clientIP}`);
   const allow = await promptForAccess(clientIP);
-  
+
   if (allow) {
-    const newHash = generateHash();
-    createNewSecretFile(newHash);
-    res.cookie('secret', newHash, { secure: true, maxAge: 3600000 }); // 1 hour expiry
-    return res.redirect('/main');
+    const newSecretHash = generateHash();
+    const newEncryptHash = generateHash();
+    createNewSecretFile(newSecretHash, newEncryptHash);
+
+    console.log('New Secret Hash:', newSecretHash);
+    console.log('New Encrypt Hash:', newEncryptHash);
+
+    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+
+    return next();
   } else {
     return res.status(403).send('Access Denied');
   }
 });
 
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.get('/main', (req, res) => {
-  const clientHash = req.cookies.secret;
-  
-  if (clientHash && checkHash(clientHash)) {
-    res.sendFile(path.join(__dirname, 'main.html'));
-  } else {
-    res.redirect('/');
+  const clientSecretHash = req.cookies.secret;
+  const clientEncryptHash = req.cookies.encrypt;
+
+  console.log('Cookies received:', clientSecretHash, clientEncryptHash);
+
+  if (clientSecretHash && clientEncryptHash && checkHash(clientSecretHash, clientEncryptHash)) {
+    return res.sendFile(path.join(__dirname, 'main.html'));
   }
+
+  console.log('Redirecting to /');
+  res.redirect('/');
 });
-
-
-
-
-
-
-
 
 // Start Server
-getPublicIP().then((ip) => {
-  const port = 443;
-  const server = https.createServer(httpsOptions, app);
-  server.listen(port, () => {
-    console.log(`HTTPS Server running at https://${ip}:${port}/`);
-    console.log(`Access this URL on your phone's browser`);
+getPublicIP()
+  .then((ip) => {
+    const port = 443;
+    const server = https.createServer(httpsOptions, app);
+    
+    server.listen(port, () => {
+      console.log(`HTTPS Server running at https://${ip}:${port}/`);
+      console.log(`Access this URL on your phone's browser`);
+    });
+  })
+  .catch((err) => {
+    console.error('Error getting public IP:', err);
   });
-}).catch((err) => {
-  console.error('Error getting public IP:', err);
-});
+
+
+
+
+
+
