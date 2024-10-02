@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waiting for Confirmation</title>
     <style>
+        /* Global styles */
         body {
             font-family: Arial, sans-serif;
             display: flex;
@@ -14,6 +15,8 @@
             margin: 0;
             background-color: #f0f0f0;
         }
+
+        /* Message container styles */
         .message {
             text-align: center;
             padding: 20px;
@@ -29,34 +32,30 @@
         <p>Please wait while your access is being confirmed.</p>
     </div>
 
-
-
-
-
-
-<script>
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
-    function checkAccess() {
-        const secretCookie = getCookie('secret');
-        if (secretCookie) {
-            window.location.href = '/main';
-        } else {
-            setTimeout(checkAccess, 5000); // Check again after 5 seconds
+    <script>
+        // Function to retrieve all cookies
+        function getCookies() {
+            const cookies = {};
+            document.cookie.split(';').forEach(cookie => {
+                const [name, value] = cookie.trim().split('=');
+                cookies[name] = value;
+            });
+            return cookies;
         }
+
+        // Function to check access and redirect if necessary
+function checkAccess() {
+    const cookies = getCookies();
+    const secretCookie = cookies['secret'];
+    const encryptCookie = cookies['encrypt'];
+    if (secretCookie && encryptCookie) {
+        window.location.href = '/auth-success';
+    } else {
+        setTimeout(checkAccess, 5000); // Check again after 5 seconds
     }
-    checkAccess();
-</script>
-
-
-
-
-
-
-
+}
+        // Start checking for access
+        checkAccess();
+    </script>
 </body>
 </html>
