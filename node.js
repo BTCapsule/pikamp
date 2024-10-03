@@ -145,6 +145,31 @@ function checkHash(secretHash, encryptHash) {
 
 
 
+
+function updateSecretFile(oldSecretHash, oldEncryptHash, newSecretHash, newEncryptHash) {
+  const files = getSecretFiles();
+  for (const file of files) {
+    try {
+      const encryptedContent = fs.readFileSync(file, 'utf8');
+      const decryptedContent = decryptData(encryptedContent, oldEncryptHash);
+      if (decryptedContent === oldSecretHash) {
+        // This is the file we need to update
+        const newEncryptedContent = encryptData(newSecretHash, newEncryptHash);
+        fs.writeFileSync(file, newEncryptedContent);
+        console.log(`Updated file: ${file}`);
+        return true;
+      }
+    } catch (error) {
+      console.error(`Error processing file ${file}:`, error);
+    }
+  }
+  console.error('No matching secret file found to update');
+  return false;
+}
+
+
+
+
 app.get('/auth-success', (req, res) => {
   res.redirect('/main');
 });
@@ -192,6 +217,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+
+
+
+
+
+
+
 app.get('/main', (req, res) => {
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
@@ -199,12 +231,37 @@ app.get('/main', (req, res) => {
   console.log('Cookies received:', clientSecretHash, clientEncryptHash);
 
   if (clientSecretHash && clientEncryptHash && checkHash(clientSecretHash, clientEncryptHash)) {
+    // Generate new hashes
+    const newSecretHash = generateHash();
+    const newEncryptHash = generateHash();
+
+    // Update the existing secret file
+    updateSecretFile(clientSecretHash, clientEncryptHash, newSecretHash, newEncryptHash);
+
+    console.log('New Secret Hash:', newSecretHash);
+    console.log('New Encrypt Hash:', newEncryptHash);
+
+    // Set new cookies
+    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+
     return res.sendFile(path.join(__dirname, 'main.html'));
   }
 
   console.log('Redirecting to /');
   res.redirect('/');
 });
+
+
+
+
+
+
+
+
+
+
+
 
 // Start Server
 getPublicIP()
@@ -220,7 +277,6 @@ getPublicIP()
   .catch((err) => {
     console.error('Error getting public IP:', err);
   });
-
 
 
 
