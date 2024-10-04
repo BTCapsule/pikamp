@@ -121,13 +121,16 @@ function getSecretFiles() {
   return fs.readdirSync(__dirname).filter(file => file.endsWith('.secret'));
 }
 
-function createNewSecretFile(secretHash, encryptHash) {
+function createNewSecretFile(secretHash, encryptHash, pin = '') {
   const files = getSecretFiles();
   const newUserNumber = files.length > 0 ? Math.max(...files.map(f => parseInt(f.match(/\d+/)[0]))) + 1 : 1;
   const fileName = `user${newUserNumber}.secret`;
-  const encryptedContent = encryptData(secretHash, encryptHash);
+  const content = `${secretHash}\n${pin}`;
+  const encryptedContent = encryptData(content, encryptHash);
   fs.writeFileSync(fileName, encryptedContent);
 }
+
+
 
 function checkHash(secretHash, encryptHash) {
   const files = getSecretFiles();
@@ -168,6 +171,25 @@ function updateSecretFile(oldSecretHash, oldEncryptHash, newSecretHash, newEncry
 }
 
 
+async function checkHashAndPin(secretHash, encryptHash) {
+  const files = getSecretFiles();
+  for (const file of files) {
+    try {
+      const encryptedContent = fs.readFileSync(file, 'utf8');
+      const decryptedContent = decryptData(encryptedContent, encryptHash);
+      const [storedHash, pin] = decryptedContent.split('\n');
+      if (storedHash === secretHash) {
+        return pin ? 'pin' : 'main';
+      }
+    } catch (error) {
+      console.error('Error checking hash and pin:', error);
+    }
+  }
+  return false;
+}
+
+
+
 
 
 app.get('/auth-success', (req, res) => {
@@ -175,17 +197,83 @@ app.get('/auth-success', (req, res) => {
 });
 
 
+app.post('/create-pin', express.json(), (req, res) => {
+  const { pin } = req.body;
+  const newSecretHash = generateHash();
+  const newEncryptHash = generateHash();
+  
+  createNewSecretFile(newSecretHash, newEncryptHash, pin);
+
+  res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+  res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+
+  res.sendFile(path.join(__dirname, 'main.html'));
+});
+
+
+
+
+
+
+app.post('/verify-pin', express.json(), (req, res) => {
+  const { pin } = req.body;
+  const clientSecretHash = req.cookies.secret;
+  const clientEncryptHash = req.cookies.encrypt;
+
+  const files = getSecretFiles();
+  for (const file of files) {
+    try {
+      const encryptedContent = fs.readFileSync(file, 'utf8');
+      const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+      const [storedHash, storedPin] = decryptedContent.split('\n');
+      if (storedHash === clientSecretHash && storedPin === pin) {
+        // Generate new hashes
+        const newSecretHash = generateHash();
+        const newEncryptHash = generateHash();
+
+        // Update the existing secret file
+        const newContent = `${newSecretHash}\n${storedPin}`;
+        const newEncryptedContent = encryptData(newContent, newEncryptHash);
+        fs.writeFileSync(file, newEncryptedContent);
+
+        // Set new cookies
+        res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+        res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+
+        return res.sendStatus(200);
+      }
+    } catch (error) {
+      console.error('Error verifying PIN:', error);
+    }
+  }
+
+  res.status(401).json({ message: 'Invalid PIN' });
+});
+
+
+
+
+
+
 
 
 
 // Middleware for access control
+
+
+
 app.use(async (req, res, next) => {
   const clientIP = req.ip;
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
 
-  if (clientSecretHash && clientEncryptHash && checkHash(clientSecretHash, clientEncryptHash)) {
-    return next();
+  if (clientSecretHash && clientEncryptHash) {
+    const authResult = await checkHashAndPin(clientSecretHash, clientEncryptHash);
+    if (authResult === 'main') {
+      return next();
+    } else if (authResult === 'pin') {
+      return res.sendFile(path.join(__dirname, 'pin.html'));
+    }
   }
 
   if (req.path !== '/') {
@@ -196,21 +284,21 @@ app.use(async (req, res, next) => {
   const allow = await promptForAccess(clientIP);
 
   if (allow) {
-    const newSecretHash = generateHash();
-    const newEncryptHash = generateHash();
-    createNewSecretFile(newSecretHash, newEncryptHash);
-
-    console.log('New Secret Hash:', newSecretHash);
-    console.log('New Encrypt Hash:', newEncryptHash);
-
-    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-
-    return next();
+    return res.sendFile(path.join(__dirname, 'createpin.html'));
   } else {
     return res.status(403).send('Access Denied');
   }
 });
+
+
+
+
+
+
+
+
+
+
 
 // Routes
 app.get('/', (req, res) => {
@@ -228,24 +316,33 @@ app.get('/main', (req, res) => {
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
 
-  console.log('Cookies received:', clientSecretHash, clientEncryptHash);
+  if (clientSecretHash && clientEncryptHash) {
+    const files = getSecretFiles();
+    for (const file of files) {
+      try {
+        const encryptedContent = fs.readFileSync(file, 'utf8');
+        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+        const [storedHash, pin] = decryptedContent.split('\n');
+        if (storedHash === clientSecretHash) {
+          // Generate new hashes
+          const newSecretHash = generateHash();
+          const newEncryptHash = generateHash();
 
-  if (clientSecretHash && clientEncryptHash && checkHash(clientSecretHash, clientEncryptHash)) {
-    // Generate new hashes
-    const newSecretHash = generateHash();
-    const newEncryptHash = generateHash();
+          // Update the existing secret file
+          const newContent = `${newSecretHash}\n${pin}`;
+          const newEncryptedContent = encryptData(newContent, newEncryptHash);
+          fs.writeFileSync(file, newEncryptedContent);
 
-    // Update the existing secret file
-    updateSecretFile(clientSecretHash, clientEncryptHash, newSecretHash, newEncryptHash);
+          // Set new cookies
+          res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+          res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
 
-    console.log('New Secret Hash:', newSecretHash);
-    console.log('New Encrypt Hash:', newEncryptHash);
-
-    // Set new cookies
-    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-
-    return res.sendFile(path.join(__dirname, 'main.html'));
+          return res.sendFile(path.join(__dirname, 'main.html'));
+        }
+      } catch (error) {
+        console.error('Error processing file:', error);
+      }
+    }
   }
 
   console.log('Redirecting to /');
