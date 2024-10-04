@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter PIN</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+        }
+        #pin {
+            font-size: 24px;
+            width: 120px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .numpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+        .numpad button {
+            font-size: 18px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Enter PIN</h1>
+        <p>Enter your 4-digit PIN to access the main page</p>
+        <input type="password" id="pin" maxlength="4" readonly>
+        <div class="numpad">
+            <button onclick="addDigit('1')">1</button>
+            <button onclick="addDigit('2')">2</button>
+            <button onclick="addDigit('3')">3</button>
+            <button onclick="addDigit('4')">4</button>
+            <button onclick="addDigit('5')">5</button>
+            <button onclick="addDigit('6')">6</button>
+            <button onclick="addDigit('7')">7</button>
+            <button onclick="addDigit('8')">8</button>
+            <button onclick="addDigit('9')">9</button>
+            <button onclick="clearPin()">Clear</button>
+            <button onclick="addDigit('0')">0</button>
+            <button onclick="submitPin()">Enter</button>
+        </div>
+    </div>
+    <script>
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        function addDigit(digit) {
+            const pin = document.getElementById('pin');
+            if (pin.value.length < 4) {
+                pin.value += digit;
+            }
+        }
+
+        function clearPin() {
+            document.getElementById('pin').value = '';
+        }
+
+ function submitPin() {
+  const pin = document.getElementById('pin').value;
+  fetch('/verify-pin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ pin }),
+  })
+  .then(response => {
+    if (response.ok) {
+      window.location.href = '/main';
+    } else {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        alert('Maximum attempts reached. Please try again in 1 hour.');
+        disableInputs();
+      } else {
+        alert(`Invalid PIN. ${maxAttempts - attempts} attempts remaining.`);
+        clearPin();
+      }
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred. Please try again.');
+  });
+}
+
+        function disableInputs() {
+            document.getElementById('pin').disabled = true;
+            const buttons = document.querySelectorAll('.numpad button');
+            buttons.forEach(button => button.disabled = true);
+        }
+    </script>
+</body>
+</html>
