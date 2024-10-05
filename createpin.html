@@ -67,27 +67,28 @@
             document.getElementById('pin').value = '';
         }
 
-        function submitPin() {
-            const pin = document.getElementById('pin').value;
-            fetch('/create-pin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ pin }),
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.href = '/main';
-                } else {
-                    alert('Error creating PIN. Please try again.');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            });
+function submitPin() {
+    const pin = document.getElementById('pin').value;
+    fetch('/create-pin', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pin }),
+    })
+    .then(response => {
+        if (response.ok) {
+            window.location.href = '/main';
+        } else {
+            alert('Error creating PIN. Please try again.');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    });
+}
     </script>
 </body>
 </html>
+
