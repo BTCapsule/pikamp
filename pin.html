@@ -70,7 +70,7 @@
             document.getElementById('pin').value = '';
         }
 
- function submitPin() {
+function submitPin() {
   const pin = document.getElementById('pin').value;
   fetch('/verify-pin', {
     method: 'POST',
@@ -81,6 +81,7 @@
   })
   .then(response => {
     if (response.ok) {
+      console.log('PIN verified, redirecting to /main');
       window.location.href = '/main';
     } else {
       attempts++;
@@ -107,3 +108,4 @@
     </script>
 </body>
 </html>
+
