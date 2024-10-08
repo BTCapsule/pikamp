@@ -85,6 +85,7 @@
             return cookies;
         }
 
+
         // Display selected file names
         const fileInput = document.getElementById('file-upload');
         const fileNamesDisplay = document.getElementById('file-names');
@@ -98,45 +99,48 @@
         });
 
         // Handle form submission
-        document.getElementById('upload-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            var formData = new FormData(this);
-            var xhr = new XMLHttpRequest();
-            var progressBar = document.getElementById('upload-progress');
+// Handle form submission
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var formData = new FormData(this);
+    var xhr = new XMLHttpRequest();
+    var progressBar = document.getElementById('upload-progress');
 
-            xhr.open('POST', '/upload', true);
+    xhr.open('POST', '/upload', true);
 
-            // Update progress bar
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    var percentComplete = (e.loaded / e.total) * 100;
-                    progressBar.value = percentComplete;
-                    progressBar.style.display = 'block';
-                }
-            };
+    // Update progress bar
+    xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+            var percentComplete = (e.loaded / e.total) * 100;
+            progressBar.value = percentComplete;
+            progressBar.style.display = 'block';
+        }
+    };
 
-            // Handle successful upload
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    var response = JSON.parse(xhr.responseText);
-                    console.log('Success:', response);
-                    alert('Files uploaded successfully!');
-                } else {
-                    console.error('Error:', xhr.statusText);
-                    alert('Error uploading files.');
-                }
-                progressBar.style.display = 'none';
-            };
+    // Handle successful upload
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            var response = JSON.parse(xhr.responseText);
+            console.log('Success:', response);
+            alert('Files uploaded successfully!');
+        } else {
+            console.error('Error:', xhr.statusText);
+            alert('Error uploading files.');
+            checkSessionAuth(); // Check session auth on error
+        }
+        progressBar.style.display = 'none';
+    };
 
-            // Handle upload error
-            xhr.onerror = function() {
-                console.error('Error:', xhr.statusText);
-                alert('Error uploading files.');
-                progressBar.style.display = 'none';
-            };
+    // Handle upload error
+    xhr.onerror = function() {
+        console.error('Error:', xhr.statusText);
+        alert('Error uploading files.');
+        progressBar.style.display = 'none';
+        checkSessionAuth(); // Check session auth on error
+    };
 
-            xhr.send(formData);
-        });
+    xhr.send(formData);
+});
     </script>
 </body>
 </html>
