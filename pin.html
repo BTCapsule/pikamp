@@ -84,6 +84,7 @@
                 if (data.success) {
                     console.log('PIN verified, redirecting to:', data.redirectUrl);
                     window.location.href = data.redirectUrl;
+					console.log(data.redirectUrl);
                 } else {
                     attempts++;
                     if (attempts >= maxAttempts) {
@@ -109,5 +110,4 @@
     </script>
 </body>
 </html>
-
 
