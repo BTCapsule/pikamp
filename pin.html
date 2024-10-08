@@ -70,35 +70,36 @@
             document.getElementById('pin').value = '';
         }
 
-function submitPin() {
-  const pin = document.getElementById('pin').value;
-  fetch('/verify-pin', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ pin }),
-  })
-  .then(response => {
-    if (response.ok) {
-      console.log('PIN verified, redirecting to /main');
-      window.location.href = '/main';
-    } else {
-      attempts++;
-      if (attempts >= maxAttempts) {
-        alert('Maximum attempts reached. Please try again in 1 hour.');
-        disableInputs();
-      } else {
-        alert(`Invalid PIN. ${maxAttempts - attempts} attempts remaining.`);
-        clearPin();
-      }
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('An error occurred. Please try again.');
-  });
-}
+        function submitPin() {
+            const pin = document.getElementById('pin').value;
+            fetch('/verify-pin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ pin }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('PIN verified, redirecting to:', data.redirectUrl);
+                    window.location.href = data.redirectUrl;
+                } else {
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        alert('Maximum attempts reached. Please try again in 1 hour.');
+                        disableInputs();
+                    } else {
+                        alert(`Invalid PIN. ${maxAttempts - attempts} attempts remaining.`);
+                        clearPin();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            });
+        }
 
         function disableInputs() {
             document.getElementById('pin').disabled = true;
