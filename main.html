@@ -54,8 +54,8 @@
             font-weight: bold;
         }
 
-        /* File name display styles */
-        #file-name {
+        /* File names display styles */
+        #file-names {
             margin-top: 10px;
             font-style: italic;
         }
@@ -63,14 +63,14 @@
 </head>
 <body>
     <div class="container">
-	<a href="/uploads">View Uploads</a>
+        <a href="/uploads">View Uploads</a>
         <h1>Upload Your Content</h1>
         <form id="upload-form" enctype="multipart/form-data">
-            <label for="file-upload" class="upload-btn">Choose File</label>
-            <input type="file" id="file-upload" name="file-upload">
+            <label for="file-upload" class="upload-btn">Choose Files</label>
+            <input type="file" id="file-upload" name="file-upload" multiple>
             <button type="submit" class="upload-btn">Upload</button>
         </form>
-        <div id="file-name"></div>
+        <div id="file-names"></div>
         <progress id="upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
     </div>
 
@@ -85,7 +85,17 @@
             return cookies;
         }
 
-
+        // Display selected file names
+        const fileInput = document.getElementById('file-upload');
+        const fileNamesDisplay = document.getElementById('file-names');
+        fileInput.addEventListener('change', function(e) {
+            if (this.files && this.files.length > 0) {
+                const fileNames = Array.from(this.files).map(file => file.name).join(', ');
+                fileNamesDisplay.textContent = `Selected files: ${fileNames}`;
+            } else {
+                fileNamesDisplay.textContent = '';
+            }
+        });
 
         // Handle form submission
         document.getElementById('upload-form').addEventListener('submit', function(e) {
@@ -110,10 +120,10 @@
                 if (xhr.status === 200) {
                     var response = JSON.parse(xhr.responseText);
                     console.log('Success:', response);
-                    alert('File uploaded successfully!');
+                    alert('Files uploaded successfully!');
                 } else {
                     console.error('Error:', xhr.statusText);
-                    alert('Error uploading file.');
+                    alert('Error uploading files.');
                 }
                 progressBar.style.display = 'none';
             };
@@ -121,22 +131,11 @@
             // Handle upload error
             xhr.onerror = function() {
                 console.error('Error:', xhr.statusText);
-                alert('Error uploading file.');
+                alert('Error uploading files.');
                 progressBar.style.display = 'none';
             };
 
             xhr.send(formData);
-        });
-
-        // Display selected file name
-        const fileInput = document.getElementById('file-upload');
-        const fileNameDisplay = document.getElementById('file-name');
-        fileInput.addEventListener('change', function(e) {
-            if (this.files && this.files.length > 0) {
-                fileNameDisplay.textContent = `Selected file: ${this.files[0].name}`;
-            } else {
-                fileNameDisplay.textContent = '';
-            }
         });
     </script>
 </body>
