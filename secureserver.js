@@ -211,6 +211,10 @@ async function checkHashAndPin(secretHash, encryptHash) {
 
 
 async function checkSessionAuth(req, res, next) {
+	
+		  	const previousUrl = req.get('Referer');
+      res.cookie('redirect_after_pin', previousUrl, { secure: true, sameSite: 'lax', maxAge: 30000000 });
+	  console.log('Url: ' + previousUrl)
   if (req.cookies.session_auth === 'true') {
     return next();
   }
@@ -219,10 +223,13 @@ async function checkSessionAuth(req, res, next) {
   const clientEncryptHash = req.cookies.encrypt;
 
   if (clientSecretHash && clientEncryptHash) {
+
     const authResult = await checkHashAndPin(clientSecretHash, clientEncryptHash);
     if (authResult === 'pin') {
+		
       // Store the current URL in a cookie before redirecting to PIN page
-      res.cookie('redirect_after_pin', req.originalUrl, { secure: true, sameSite: 'lax', maxAge: 300000 }); // 5 minutes expiry
+
+	 // 5 minutes expiry
       return res.redirect('/pin');
     } else if (authResult === 'main') {
       // Set the session_auth cookie and proceed
@@ -292,11 +299,11 @@ app.post('/verify-pin', express.json(), (req, res) => {
       if (storedHash === clientSecretHash && storedPin === pin) {
         // PIN is correct, set a cookie to indicate PIN verification
  res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 360002 });
-    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
+    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 360000 });
     
     // Get the stored redirect URL
     const redirectUrl = req.cookies.redirect_after_pin || '/main';
-    
+   console.log('Redirecting to: ' + req.cookies.redirect_after_pin);
     // Clear the redirect cookie
     res.clearCookie('redirect_after_pin');
     
