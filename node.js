@@ -5,6 +5,9 @@ const express = require('express');
 // Get the app instance from secureServer
 const app = secureServer.app;
 
+
+
+/*
 // Add the route for uploads.html with security checks
 app.get('/uploads', async (req, res) => {
   const clientSecretHash = req.cookies.secret;
@@ -24,6 +27,11 @@ app.get('/uploads', async (req, res) => {
   // If not authenticated, redirect to the home page
   res.redirect('/');
 });
+
+*/
+
+
+
 
 // Add file upload handling
 const multer = require('multer');
@@ -47,6 +55,10 @@ app.post('/upload', upload.single('file-upload'), (req, res) => {
 
 
 secureServer.start();
+
+
+
+
 
 
 
