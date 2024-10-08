@@ -210,17 +210,30 @@ async function checkHashAndPin(secretHash, encryptHash) {
 
 
 
-
-
-function checkSessionAuth(req, res, next) {
+async function checkSessionAuth(req, res, next) {
   if (req.cookies.session_auth === 'true') {
-    next();
-  } else {
-    res.status(403).send('Access Denied');
+    return next();
   }
+
+  const clientSecretHash = req.cookies.secret;
+  const clientEncryptHash = req.cookies.encrypt;
+
+  if (clientSecretHash && clientEncryptHash) {
+    const authResult = await checkHashAndPin(clientSecretHash, clientEncryptHash);
+    if (authResult === 'pin') {
+      // Store the current URL in a cookie before redirecting to PIN page
+      res.cookie('redirect_after_pin', req.originalUrl, { secure: true, sameSite: 'lax', maxAge: 300000 }); // 5 minutes expiry
+      return res.redirect('/pin');
+    } else if (authResult === 'main') {
+      // Set the session_auth cookie and proceed
+      res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
+      return next();
+    }
+  }
+
+  // If no valid cookies are present, redirect to the home page
+  res.redirect('/');
 }
-
-
 
 
 
@@ -278,8 +291,16 @@ app.post('/verify-pin', express.json(), (req, res) => {
       const [storedHash, storedPin] = decryptedContent.split('\n');
       if (storedHash === clientSecretHash && storedPin === pin) {
         // PIN is correct, set a cookie to indicate PIN verification
-        res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 360002 });
-        return res.sendStatus(200);
+ res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 360002 });
+    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
+    
+    // Get the stored redirect URL
+    const redirectUrl = req.cookies.redirect_after_pin || '/main';
+    
+    // Clear the redirect cookie
+    res.clearCookie('redirect_after_pin');
+    
+    return res.json({ success: true, redirectUrl });
       }
     } catch (error) {
      // console.error('Error verifying PIN:', error);
@@ -312,7 +333,7 @@ app.get('/main', (req, res) => {
             return res.redirect('/pin');
           } else {
             // User is fully authenticated, set a session cookie
-            res.cookie('session_auth', 'true', { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 36000 });
+            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
             return res.sendFile(path.join(__dirname, 'main.html'));
           }
         }
@@ -326,7 +347,7 @@ app.get('/main', (req, res) => {
 });
 
 
-
+/*
 app.get('/uploads', checkSessionAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'uploads', 'uploads.html'));
 });
@@ -335,6 +356,13 @@ app.get('/uploads', checkSessionAuth, (req, res) => {
 app.get('/uploads/:filename', checkSessionAuth, (req, res) => {
   const filename = req.params.filename;
   res.sendFile(path.join(__dirname, 'uploads', filename));
+});
+
+app.use('/uploads', (req, res, next) => {
+  if (req.path.match(/\.(jpeg|jpg|gif|png)$/i)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+  }
+  next();
 });
 
 
@@ -347,6 +375,8 @@ app.get('/api/files', checkSessionAuth, (req, res) => {
     }
   });
 });
+
+*/
 
 
 
@@ -481,6 +511,7 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
+
 
 
 
