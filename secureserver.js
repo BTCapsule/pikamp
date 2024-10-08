@@ -207,6 +207,27 @@ async function checkHashAndPin(secretHash, encryptHash) {
   return false;
 }
 
+
+
+
+
+
+function checkSessionAuth(req, res, next) {
+  if (req.cookies.session_auth === 'true') {
+    next();
+  } else {
+    res.status(403).send('Access Denied');
+  }
+}
+
+
+
+
+
+
+
+
+
 /*
 
 app.get('/auth-success', (req, res) => {
@@ -232,8 +253,8 @@ app.post('/create-pin', express.json(), (req, res) => {
   
   createNewSecretFile(newSecretHash, newEncryptHash, pin);
 
-  res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-  res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
+  res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+  res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
 
   console.log('PIN created, redirecting to /main');
   res.sendStatus(200); // Change this line
@@ -257,7 +278,7 @@ app.post('/verify-pin', express.json(), (req, res) => {
       const [storedHash, storedPin] = decryptedContent.split('\n');
       if (storedHash === clientSecretHash && storedPin === pin) {
         // PIN is correct, set a cookie to indicate PIN verification
-        res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
+        res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 360002 });
         return res.sendStatus(200);
       }
     } catch (error) {
@@ -274,16 +295,10 @@ app.post('/verify-pin', express.json(), (req, res) => {
 
 
 
-
 app.get('/main', (req, res) => {
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
   const pinVerified = req.cookies.pin_verified;
-
-  console.log('Accessing /main route');
-  console.log(`Client Secret Hash: ${clientSecretHash}`);
-  console.log(`Client Encrypt Hash: ${clientEncryptHash}`);
-  console.log(`PIN Verified: ${pinVerified}`);
 
   if (clientSecretHash && clientEncryptHash) {
     const files = getSecretFiles();
@@ -294,42 +309,44 @@ app.get('/main', (req, res) => {
         const [storedHash, storedPin] = decryptedContent.split('\n');
         if (storedHash === clientSecretHash) {
           if (storedPin && !pinVerified) {
-            console.log('PIN exists but not verified, redirecting to /pin');
             return res.redirect('/pin');
           } else {
-            // Generate new hashes
-            const newSecretHash = generateHash();
-            const newEncryptHash = generateHash();
-
-            // Update the existing secret file
-            const newContent = `${newSecretHash}\n${storedPin}`;
-            const newEncryptedContent = encryptData(newContent, newEncryptHash);
-            fs.writeFileSync(file, newEncryptedContent);
-
-            // Set new cookies
-            res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-            res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 3600000 });
-            
-            // Clear the pin_verified cookie
-            res.clearCookie('pin_verified');
-
-            console.log('Sending main.html');
+            // User is fully authenticated, set a session cookie
+            res.cookie('session_auth', 'true', { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 36000 });
             return res.sendFile(path.join(__dirname, 'main.html'));
           }
         }
       } catch (error) {
-       // console.error('Error processing file:', error);
+        console.error('Error processing file:', error);
       }
     }
   }
 
-  console.log('Redirecting to /');
   res.redirect('/');
 });
 
 
 
+app.get('/uploads', checkSessionAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'uploads', 'uploads.html'));
+});
 
+
+app.get('/uploads/:filename', checkSessionAuth, (req, res) => {
+  const filename = req.params.filename;
+  res.sendFile(path.join(__dirname, 'uploads', filename));
+});
+
+
+app.get('/api/files', checkSessionAuth, (req, res) => {
+  fs.readdir(path.join(__dirname, 'uploads'), (err, files) => {
+    if (err) {
+      res.status(500).json({ error: 'Unable to read directory' });
+    } else {
+      res.json(files.filter(file => file !== 'uploads.html'));
+    }
+  });
+});
 
 
 
@@ -461,8 +478,13 @@ module.exports = {
   encryptData,
   decryptData,
   getSecretFiles,
-  updateSecretFile
+  updateSecretFile,
+  checkSessionAuth
 };
+
+
+
+
 
 
 
