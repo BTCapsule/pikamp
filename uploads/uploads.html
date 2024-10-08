@@ -38,17 +38,22 @@
         if (parts.length === 2) return parts.pop().split(';').shift();
     }
 
-    // Check for session_auth cookie
-    const sessionAuth = getCookie('session_auth');
-
-    // If session_auth cookie is not present, redirect to the home page
-    if (sessionAuth !== 'true') {
-        window.location.href = 'pin.html';
+    function checkSessionAuth() {
+        const sessionAuth = getCookie('session_auth');
+        if (sessionAuth !== 'true') {
+            window.location.href = '/pin'; // Redirect to PIN entry page
+        }
     }
+
+    // Check session auth immediately
+    checkSessionAuth();
+
+    // Set up periodic check every 30 seconds (adjust as needed)
+    setInterval(checkSessionAuth, 30000);
     </script>
 </head>
 <body>
-    <h1>File Explorer</h1>
+  
     <div id="media-files" class="file-grid"></div>
     <div id="other-files" class="other-files"></div>
 
@@ -61,40 +66,60 @@
             return /\.(mp4|webm|ogg|mov)$/i.test(filename);
         }
 
-        fetch('/api/files')
-            .then(response => response.json())
-            .then(files => {
-                const mediaFiles = document.getElementById('media-files');
-                const otherFiles = document.getElementById('other-files');
-                
-                files.forEach(file => {
-                    if (isImageFile(file) || isVideoFile(file)) {
-                        const div = document.createElement('div');
-                        div.className = 'thumbnail';
-                        
-                        if (isImageFile(file)) {
-                            const img = document.createElement('img');
-                            img.src = `/uploads/${file}`;
-                            img.alt = file;
-                            div.appendChild(img);
-                        } else {
-                            const video = document.createElement('video');
-                            video.src = `/uploads/${file}`;
-                            video.controls = true;
-                            div.appendChild(video);
-                        }
-                        
-                        mediaFiles.appendChild(div);
-                    } else {
-                        const a = document.createElement('a');
-                        a.href = `/uploads/${file}`;
-                        a.textContent = file;
-                        otherFiles.appendChild(a);
-                        otherFiles.appendChild(document.createElement('br'));
+        function fetchFiles() {
+            fetch('/api/files')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
                     }
+                    return response.json();
+                })
+                .then(files => {
+                    const mediaFiles = document.getElementById('media-files');
+                    const otherFiles = document.getElementById('other-files');
+                    
+                    // Clear existing content
+                    mediaFiles.innerHTML = '';
+                    otherFiles.innerHTML = '';
+                    
+                    files.forEach(file => {
+                        if (isImageFile(file) || isVideoFile(file)) {
+                            const div = document.createElement('div');
+                            div.className = 'thumbnail';
+                            
+                            if (isImageFile(file)) {
+                                const img = document.createElement('img');
+                                img.src = `/uploads/${file}`;
+                                img.alt = file;
+                                div.appendChild(img);
+                            } else {
+                                const video = document.createElement('video');
+                                video.src = `/uploads/${file}`;
+                                video.controls = true;
+                                div.appendChild(video);
+                            }
+                            
+                            mediaFiles.appendChild(div);
+                        } else {
+                            const a = document.createElement('a');
+                            a.href = `/uploads/${file}`;
+                            a.textContent = file;
+                            otherFiles.appendChild(a);
+                            otherFiles.appendChild(document.createElement('br'));
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    checkSessionAuth(); // Check session auth on error
                 });
-            })
-            .catch(error => console.error('Error:', error));
+        }
+
+        // Initial fetch
+        fetchFiles();
+
+        // Set up periodic fetch every 60 seconds (adjust as needed)
+        setInterval(fetchFiles, 60000);
     </script>
 </body>
 </html>
