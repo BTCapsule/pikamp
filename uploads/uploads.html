@@ -4,32 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Explorer</title>
-	<script>
-  // Function to get cookie value
-  function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-  }
+    <script>
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
 
-  // Check for secret and encrypt cookies
-  const secretHash = getCookie('secret');
-  const encryptHash = getCookie('encrypt');
+    // Check for session_auth cookie
+    const sessionAuth = getCookie('session_auth');
 
-  // If cookies are not present, redirect to the home page
-  if (!secretHash || !encryptHash) {
-    window.location.href = '/';
-  }
-
-  // You can add additional checks here if needed, such as verifying the PIN
-</script>
+    // If session_auth cookie is not present, redirect to the home page
+    if (sessionAuth !== 'true') {
+        window.location.href = '/';
+    }
+    </script>
 </head>
 <body>
     <h1>File Explorer</h1>
     <div id="file-list"></div>
-
-
-
 
     <script>
         fetch('/api/files')
