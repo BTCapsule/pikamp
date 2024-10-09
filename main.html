@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Page</title>
+    <title>BTCapsule - Upload and View Files</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
             font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #000;
+            color: #fff;
         }
-
         .upload-btn {
             position: absolute;
             top: 20px;
@@ -24,30 +25,45 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-
         .upload-btn:hover {
             background-color: #0056b3;
         }
-
         input[type="file"] {
             display: none;
         }
-
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 60px;
+        }
+        .media-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            aspect-ratio: 1 / 1;
+        }
+        .media-item img, .media-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
         #upload-progress {
-            position: absolute;
-            top: 70px;
-            right: 20px;
-            width: 200px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background-color: #007bff;
             display: none;
         }
     </style>
 </head>
 <body>
-    <form id="upload-form" enctype="multipart/form-data">
-        <input type="file" id="file-upload" name="file-upload" multiple>
-        <button type="button" id="upload-btn" class="upload-btn">Upload</button>
-    </form>
-    <progress id="upload-progress" value="0" max="100"></progress>
+    <input type="file" id="file-upload" name="file-upload" multiple>
+    <label for="file-upload" class="upload-btn">Upload</label>
+    <div id="upload-progress"></div>
+    <div class="media-grid" id="media-container"></div>
 
     <script>
         function getCookies() {
@@ -70,58 +86,81 @@
         checkSessionAuth();
         setInterval(checkSessionAuth, 3600000);
 
-        const fileInput = document.getElementById('file-upload');
-        const uploadBtn = document.getElementById('upload-btn');
-        const uploadForm = document.getElementById('upload-form');
-        const progressBar = document.getElementById('upload-progress');
-
-        uploadBtn.addEventListener('click', function() {
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', function(e) {
-            if (this.files && this.files.length > 0) {
-                uploadFiles();
+        document.getElementById('file-upload').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                uploadFiles(this.files);
             }
         });
 
-        function uploadFiles() {
-            var formData = new FormData(uploadForm);
+        function uploadFiles(files) {
+            var formData = new FormData();
+            for (let file of files) {
+                formData.append('file-upload', file);
+            }
+
             var xhr = new XMLHttpRequest();
+            var progressBar = document.getElementById('upload-progress');
 
             xhr.open('POST', '/upload', true);
 
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     var percentComplete = (e.loaded / e.total) * 100;
-                    progressBar.value = percentComplete;
+                    progressBar.style.width = percentComplete + '%';
                     progressBar.style.display = 'block';
                 }
             };
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    var response = JSON.parse(xhr.responseText);
-                    console.log('Success:', response);
-                    alert('Files uploaded successfully!');
+                    console.log('Files uploaded successfully');
+                    loadFiles();
                 } else {
-                    console.error('Error:', xhr.statusText);
-                    alert('Error uploading files.');
+                    console.error('Error uploading files');
                     checkSessionAuth();
                 }
                 progressBar.style.display = 'none';
-                fileInput.value = '';
             };
 
             xhr.onerror = function() {
-                console.error('Error:', xhr.statusText);
-                alert('Error uploading files.');
+                console.error('Error uploading files');
                 progressBar.style.display = 'none';
                 checkSessionAuth();
             };
 
             xhr.send(formData);
         }
+
+        function loadFiles() {
+            fetch('/api/files')
+                .then(response => response.json())
+                .then(files => {
+                    const mediaContainer = document.getElementById('media-container');
+                    mediaContainer.innerHTML = '';
+
+                    files.forEach(file => {
+                        if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                            const mediaItem = document.createElement('div');
+                            mediaItem.className = 'media-item';
+                            mediaItem.innerHTML = `
+                                <img src="/uploads/${file.thumbnail}" alt="${file.name}" loading="lazy" 
+                                     onclick="window.open('/uploads/${file.name}', '_blank')">
+                            `;
+                            mediaContainer.appendChild(mediaItem);
+                        } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
+                            const mediaItem = document.createElement('div');
+                            mediaItem.className = 'media-item';
+                            mediaItem.innerHTML = `
+                                <video src="/uploads/${file.name}" controls></video>
+                            `;
+                            mediaContainer.appendChild(mediaItem);
+                        }
+                    });
+                })
+                .catch(error => console.error('Error loading files:', error));
+        }
+
+        loadFiles();
     </script>
 </body>
 </html>
