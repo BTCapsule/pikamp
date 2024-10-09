@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,19 +63,28 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <a href="/uploads">View Uploads</a>
-        <h1>Upload Your Content</h1>
-        <form id="upload-form" enctype="multipart/form-data">
-            <label for="file-upload" class="upload-btn">Choose Files</label>
-            <input type="file" id="file-upload" name="file-upload" multiple>
-            <button type="submit" class="upload-btn">Upload</button>
-        </form>
-        <div id="file-names"></div>
-        <progress id="upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
-    </div>
 
- <script>
+
+
+
+
+
+
+
+
+
+<div class="container">
+    <a href="/uploads">View Uploads</a>
+    <h1>Upload Your Content</h1>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file-upload" name="file-upload" multiple style="display: none;">
+        <button type="button" id="upload-btn" class="upload-btn">Upload</button>
+    </form>
+    <div id="file-names"></div>
+    <progress id="upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
+</div>
+
+<script>
     // Existing getCookies function
     function getCookies() {
         const cookies = {};
@@ -101,62 +111,60 @@
     setInterval(checkSessionAuth, 3600000);
 
 
+    const fileInput = document.getElementById('file-upload');
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileNamesDisplay = document.getElementById('file-names');
+    const uploadForm = document.getElementById('upload-form');
+    const progressBar = document.getElementById('upload-progress');
 
-        // Display selected file names
-        const fileInput = document.getElementById('file-upload');
-        const fileNamesDisplay = document.getElementById('file-names');
-        fileInput.addEventListener('change', function(e) {
-            if (this.files && this.files.length > 0) {
-                const fileNames = Array.from(this.files).map(file => file.name).join(', ');
-                fileNamesDisplay.textContent = `Selected files: ${fileNames}`;
-            } else {
-                fileNamesDisplay.textContent = '';
-            }
-        });
+    uploadBtn.addEventListener('click', function() {
+        fileInput.click();
+    });
 
-        // Handle form submission
-// Handle form submission
-document.getElementById('upload-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var formData = new FormData(this);
-    var xhr = new XMLHttpRequest();
-    var progressBar = document.getElementById('upload-progress');
-
-    xhr.open('POST', '/upload', true);
-
-    // Update progress bar
-    xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-            var percentComplete = (e.loaded / e.total) * 100;
-            progressBar.value = percentComplete;
-            progressBar.style.display = 'block';
+    fileInput.addEventListener('change', function(e) {
+        if (this.files && this.files.length > 0) {
+            const fileNames = Array.from(this.files).map(file => file.name).join(', ');
+            fileNamesDisplay.textContent = `Selected files: ${fileNames}`;
+            uploadFiles();
         }
-    };
+    });
 
-    // Handle successful upload
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            var response = JSON.parse(xhr.responseText);
-            console.log('Success:', response);
-            alert('Files uploaded successfully!');
-        } else {
+    function uploadFiles() {
+        var formData = new FormData(uploadForm);
+        var xhr = new XMLHttpRequest();
+
+        xhr.open('POST', '/upload', true);
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var percentComplete = (e.loaded / e.total) * 100;
+                progressBar.value = percentComplete;
+                progressBar.style.display = 'block';
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                console.log('Success:', response);
+                alert('Files uploaded successfully!');
+            } else {
+                console.error('Error:', xhr.statusText);
+                alert('Error uploading files.');
+                checkSessionAuth();
+            }
+            progressBar.style.display = 'none';
+            fileInput.value = ''; // Clear the file input
+            fileNamesDisplay.textContent = ''; // Clear the file names display
+        };
+
+        xhr.onerror = function() {
             console.error('Error:', xhr.statusText);
             alert('Error uploading files.');
-            checkSessionAuth(); // Check session auth on error
-        }
-        progressBar.style.display = 'none';
-    };
+            progressBar.style.display = 'none';
+            checkSessionAuth();
+        };
 
-    // Handle upload error
-    xhr.onerror = function() {
-        console.error('Error:', xhr.statusText);
-        alert('Error uploading files.');
-        progressBar.style.display = 'none';
-        checkSessionAuth(); // Check session auth on error
-    };
-
-    xhr.send(formData);
-});
-    </script>
-</body>
-</html>
+        xhr.send(formData);
+    }
+</script>
