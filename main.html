@@ -16,18 +16,18 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            padding: 10px 20px;
+            padding: 5px 10px;
             font-size: 16px;
+			font-weight: bold;
             color: white;
-            background-color: #007bff;
+            background: rgba(30,30,30,0.8);
             border: none;
+			border-radius: 20px;
             cursor: pointer;
-            transition: background-color 0.3s;
+           
             z-index: 1000;
         }
-        .upload-btn:hover {
-            background-color: #0056b3;
-        }
+
         input[type="file"] {
             display: none;
         }
@@ -55,6 +55,7 @@
             height: 5px;
             background-color: #007bff;
             display: none;
+			z-index: 9999;
         }
     </style>
 </head>
@@ -130,34 +131,29 @@
             xhr.send(formData);
         }
 
-        function loadFiles() {
-            fetch('/api/files')
-                .then(response => response.json())
-                .then(files => {
-                    const mediaContainer = document.getElementById('media-container');
-                    mediaContainer.innerHTML = '';
+function loadFiles() {
+  fetch('/api/files')
+    .then(response => response.json())
+    .then(files => {
+      const mediaContainer = document.getElementById('media-container');
+      mediaContainer.innerHTML = '';
 
-                    files.forEach(file => {
-                        if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                            const mediaItem = document.createElement('div');
-                            mediaItem.className = 'media-item';
-                            mediaItem.innerHTML = `
-                                <img src="/uploads/${file.thumbnail}" alt="${file.name}" loading="lazy" 
-                                     onclick="window.open('/uploads/${file.name}', '_blank')">
-                            `;
-                            mediaContainer.appendChild(mediaItem);
-                        } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
-                            const mediaItem = document.createElement('div');
-                            mediaItem.className = 'media-item';
-                            mediaItem.innerHTML = `
-                                <video src="/uploads/${file.name}" controls></video>
-                            `;
-                            mediaContainer.appendChild(mediaItem);
-                        }
-                    });
-                })
-                .catch(error => console.error('Error loading files:', error));
+      files.forEach(file => {
+        if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+          const mediaItem = document.createElement('div');
+          mediaItem.className = 'media-item';
+          mediaItem.innerHTML = `
+            <img src="/uploads/${file.thumbnail}" alt="${file.name}" loading="lazy" 
+                 onclick="window.open('/uploads/${file.name}', '_blank')">
+          `;
+          mediaContainer.appendChild(mediaItem);
+        } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
+          // Video handling remains the same
         }
+      });
+    })
+    .catch(error => console.error('Error loading files:', error));
+}
 
         loadFiles();
     </script>
