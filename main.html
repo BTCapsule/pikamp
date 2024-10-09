@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,30 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload Page</title>
     <style>
-        /* Global styles */
         body {
-            font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
         }
 
-        /* Container styles */
-        .container {
-            text-align: center;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Upload button styles */
         .upload-btn {
-            display: inline-block;
+            position: absolute;
+            top: 20px;
+            right: 20px;
             padding: 10px 20px;
             font-size: 16px;
             color: white;
@@ -44,127 +29,99 @@
             background-color: #0056b3;
         }
 
-        /* Hide file input */
         input[type="file"] {
             display: none;
         }
 
-        /* Upload status styles */
-        #upload-status {
-            margin-top: 10px;
-            font-weight: bold;
-        }
-
-        /* File names display styles */
-        #file-names {
-            margin-top: 10px;
-            font-style: italic;
+        #upload-progress {
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            width: 200px;
+            display: none;
         }
     </style>
 </head>
 <body>
-
-
-
-
-
-
-
-
-
-
-<div class="container">
-    <a href="/uploads">View Uploads</a>
-    <h1>Upload Your Content</h1>
     <form id="upload-form" enctype="multipart/form-data">
-        <input type="file" id="file-upload" name="file-upload" multiple style="display: none;">
+        <input type="file" id="file-upload" name="file-upload" multiple>
         <button type="button" id="upload-btn" class="upload-btn">Upload</button>
     </form>
-    <div id="file-names"></div>
-    <progress id="upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
-</div>
+    <progress id="upload-progress" value="0" max="100"></progress>
 
-<script>
-    // Existing getCookies function
-    function getCookies() {
-        const cookies = {};
-        document.cookie.split(';').forEach(cookie => {
-            const [name, value] = cookie.trim().split('=');
-            cookies[name] = value;
-        });
-        return cookies;
-    }
-
-    // New checkSessionAuth function
-    function checkSessionAuth() {
-        const cookies = getCookies();
-        const sessionAuth = cookies['session_auth'];
-        if (sessionAuth !== 'true') {
-            window.location.href = '/pin'; // Redirect to PIN entry page
+    <script>
+        function getCookies() {
+            const cookies = {};
+            document.cookie.split(';').forEach(cookie => {
+                const [name, value] = cookie.trim().split('=');
+                cookies[name] = value;
+            });
+            return cookies;
         }
-    }
 
-    // Check session auth immediately
-    checkSessionAuth();
-
-    // Set up periodic check every 30 seconds (adjust as needed)
-    setInterval(checkSessionAuth, 3600000);
-
-
-    const fileInput = document.getElementById('file-upload');
-    const uploadBtn = document.getElementById('upload-btn');
-    const fileNamesDisplay = document.getElementById('file-names');
-    const uploadForm = document.getElementById('upload-form');
-    const progressBar = document.getElementById('upload-progress');
-
-    uploadBtn.addEventListener('click', function() {
-        fileInput.click();
-    });
-
-    fileInput.addEventListener('change', function(e) {
-        if (this.files && this.files.length > 0) {
-            const fileNames = Array.from(this.files).map(file => file.name).join(', ');
-            fileNamesDisplay.textContent = `Selected files: ${fileNames}`;
-            uploadFiles();
-        }
-    });
-
-    function uploadFiles() {
-        var formData = new FormData(uploadForm);
-        var xhr = new XMLHttpRequest();
-
-        xhr.open('POST', '/upload', true);
-
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                var percentComplete = (e.loaded / e.total) * 100;
-                progressBar.value = percentComplete;
-                progressBar.style.display = 'block';
+        function checkSessionAuth() {
+            const cookies = getCookies();
+            const sessionAuth = cookies['session_auth'];
+            if (sessionAuth !== 'true') {
+                window.location.href = '/pin';
             }
-        };
+        }
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                var response = JSON.parse(xhr.responseText);
-                console.log('Success:', response);
-                alert('Files uploaded successfully!');
-            } else {
+        checkSessionAuth();
+        setInterval(checkSessionAuth, 3600000);
+
+        const fileInput = document.getElementById('file-upload');
+        const uploadBtn = document.getElementById('upload-btn');
+        const uploadForm = document.getElementById('upload-form');
+        const progressBar = document.getElementById('upload-progress');
+
+        uploadBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function(e) {
+            if (this.files && this.files.length > 0) {
+                uploadFiles();
+            }
+        });
+
+        function uploadFiles() {
+            var formData = new FormData(uploadForm);
+            var xhr = new XMLHttpRequest();
+
+            xhr.open('POST', '/upload', true);
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    var percentComplete = (e.loaded / e.total) * 100;
+                    progressBar.value = percentComplete;
+                    progressBar.style.display = 'block';
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    console.log('Success:', response);
+                    alert('Files uploaded successfully!');
+                } else {
+                    console.error('Error:', xhr.statusText);
+                    alert('Error uploading files.');
+                    checkSessionAuth();
+                }
+                progressBar.style.display = 'none';
+                fileInput.value = '';
+            };
+
+            xhr.onerror = function() {
                 console.error('Error:', xhr.statusText);
                 alert('Error uploading files.');
+                progressBar.style.display = 'none';
                 checkSessionAuth();
-            }
-            progressBar.style.display = 'none';
-            fileInput.value = ''; // Clear the file input
-            fileNamesDisplay.textContent = ''; // Clear the file names display
-        };
+            };
 
-        xhr.onerror = function() {
-            console.error('Error:', xhr.statusText);
-            alert('Error uploading files.');
-            progressBar.style.display = 'none';
-            checkSessionAuth();
-        };
-
-        xhr.send(formData);
-    }
-</script>
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
