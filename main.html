@@ -74,16 +74,32 @@
         <progress id="upload-progress" value="0" max="100" style="width: 100%; display: none;"></progress>
     </div>
 
-    <script>
-        // Function to get cookies
-        function getCookies() {
-            const cookies = {};
-            document.cookie.split(';').forEach(cookie => {
-                const [name, value] = cookie.trim().split('=');
-                cookies[name] = value;
-            });
-            return cookies;
+ <script>
+    // Existing getCookies function
+    function getCookies() {
+        const cookies = {};
+        document.cookie.split(';').forEach(cookie => {
+            const [name, value] = cookie.trim().split('=');
+            cookies[name] = value;
+        });
+        return cookies;
+    }
+
+    // New checkSessionAuth function
+    function checkSessionAuth() {
+        const cookies = getCookies();
+        const sessionAuth = cookies['session_auth'];
+        if (sessionAuth !== 'true') {
+            window.location.href = '/pin'; // Redirect to PIN entry page
         }
+    }
+
+    // Check session auth immediately
+    checkSessionAuth();
+
+    // Set up periodic check every 30 seconds (adjust as needed)
+    setInterval(checkSessionAuth, 3600000);
+
 
 
         // Display selected file names
