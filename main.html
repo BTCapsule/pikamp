@@ -2,160 +2,281 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BTCapsule - Upload and View Files</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            color: #fff;
-        }
-        .upload-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 5px 10px;
-            font-size: 16px;
-			font-weight: bold;
-            color: white;
-            background: rgba(30,30,30,0.8);
-            border: none;
-			border-radius: 20px;
-            cursor: pointer;
-           
-            z-index: 1000;
-        }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="test.jpeg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Photos">
 
-        input[type="file"] {
-            display: none;
-        }
+    <title>Photos</title>
+    <style>
+    /* Global styles */
+    html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        background-color: black;
+    }
+
+    /* Message container styles */
+    .message {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 20px;
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        margin: 20px;
+    }
+
+    .upload-btn {
+        position: fixed;
+        top: 60px;
+        right: 20px;
+        padding: 5px 10px;
+        font-size: 16px;
+        font-weight: bold;
+        color: white;
+        background: rgba(30,30,30,0.8);
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        z-index: 1000;
+    }
+
+    input[type="file"] {
+        display: none;
+    }
+
+
+.media-container {
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    padding-top: 60px; /* Padding for the upload button */
+}
+
 .media-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1.5px;
-    margin-top: 0; /* Changed from 60px to 0 */
+    padding-top: env(safe-area-inset-top, 50px); /* Padding for top of the content */
 }
-        .media-item {
-            position: relative;
-            overflow: hidden;
-            aspect-ratio: 1 / 1;
-        }
-        .media-item img, .media-item video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #upload-progress {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 5px;
-            background-color: #007bff;
-            display: none;
-			z-index: 9999;
-        }
+
+    .media-item {
+        position: relative;
+        overflow: hidden;
+        aspect-ratio: 1 / 1;
+    }
+
+    .media-item img, .media-item video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    #upload-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        background-color: #007bff;
+        display: none;
+        z-index: 9999;
+    }
     </style>
 </head>
 <body>
     <input type="file" id="file-upload" name="file-upload" multiple>
     <label for="file-upload" class="upload-btn">Upload</label>
     <div id="upload-progress"></div>
-    <div class="media-grid" id="media-container"></div>
+    <div class="media-container">
+        <div class="media-grid" id="media-container"></div>
+    </div>
 
-    <script>
-        function getCookies() {
-            const cookies = {};
-            document.cookie.split(';').forEach(cookie => {
-                const [name, value] = cookie.trim().split('=');
-                cookies[name] = value;
-            });
-            return cookies;
+<script>
+    function getCookies() {
+        const cookies = {};
+        document.cookie.split(';').forEach(cookie => {
+            const [name, value] = cookie.trim().split('=');
+            cookies[name] = value;
+        });
+        return cookies;
+    }
+
+    function checkSessionAuth() {
+        const cookies = getCookies();
+        const sessionAuth = cookies['session_auth'];
+        if (sessionAuth !== 'true') {
+            window.location.href = '/pin';
+        }
+    }
+
+    checkSessionAuth();
+    setInterval(checkSessionAuth, 3600000);
+
+    document.getElementById('file-upload').addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            uploadFiles(this.files);
+        }
+    });
+
+    function uploadFiles(files) {
+        var formData = new FormData();
+        for (let file of files) {
+            formData.append('file-upload', file);
         }
 
-        function checkSessionAuth() {
-            const cookies = getCookies();
-            const sessionAuth = cookies['session_auth'];
-            if (sessionAuth !== 'true') {
-                window.location.href = '/pin';
-            }
-        }
+        var xhr = new XMLHttpRequest();
+        var progressBar = document.getElementById('upload-progress');
 
-        checkSessionAuth();
-        setInterval(checkSessionAuth, 3600000);
+        xhr.open('POST', '/upload', true);
 
-        document.getElementById('file-upload').addEventListener('change', function(e) {
-            if (this.files.length > 0) {
-                uploadFiles(this.files);
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var percentComplete = (e.loaded / e.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                progressBar.style.display = 'block';
             }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                console.log('Files uploaded successfully');
+                loadFiles();
+            } else {
+                console.error('Error uploading files');
+                checkSessionAuth();
+            }
+            progressBar.style.display = 'none';
+        };
+
+        xhr.onerror = function() {
+            console.error('Error uploading files');
+            progressBar.style.display = 'none';
+            checkSessionAuth();
+        };
+
+        xhr.send(formData);
+    }
+
+    function createLazyLoadElement(file) {
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item';
+
+        const img = document.createElement('img');
+        img.className = 'lazy-load';
+        img.dataset.src = `/uploads/${file.thumbnail}`; // Thumbnail for initial loading
+        img.dataset.fullres = `/uploads/${file.name}`; // Full resolution image URL
+        img.alt = file.name;
+        img.loading = 'lazy';
+
+        // Add click event to download full-resolution image
+        img.addEventListener('click', function() {
+            const a = document.createElement('a');
+            a.href = this.dataset.fullres;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         });
 
-        function uploadFiles(files) {
-            var formData = new FormData();
-            for (let file of files) {
-                formData.append('file-upload', file);
-            }
+        mediaItem.appendChild(img);
+        return mediaItem;
+    }
 
-            var xhr = new XMLHttpRequest();
-            var progressBar = document.getElementById('upload-progress');
+    function lazyLoad() {
+        const lazyElements = document.querySelectorAll('.lazy-load');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.src = img.dataset.src;
 
-            xhr.open('POST', '/upload', true);
+                    // After 3 seconds, replace with full-resolution image
+                    setTimeout(() => {
+                        const fullResImg = new Image();
+                        fullResImg.onload = function() {
+                            img.src = img.dataset.fullres;
+                        };
+                        fullResImg.src = img.dataset.fullres;
+                    }, 3000);
 
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    var percentComplete = (e.loaded / e.total) * 100;
-                    progressBar.style.width = percentComplete + '%';
-                    progressBar.style.display = 'block';
+                    img.classList.remove('lazy-load');
+                    observer.unobserve(img);
                 }
-            };
+            });
+        }, {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        });
 
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    console.log('Files uploaded successfully');
-                    loadFiles();
-                } else {
-                    console.error('Error uploading files');
-                    checkSessionAuth();
-                }
-                progressBar.style.display = 'none';
-            };
+        lazyElements.forEach(element => observer.observe(element));
+    }
 
-            xhr.onerror = function() {
-                console.error('Error uploading files');
-                progressBar.style.display = 'none';
-                checkSessionAuth();
-            };
+    function loadFiles() {
+        fetch('/api/files')
+            .then(response => response.json())
+            .then(files => {
+                const mediaContainer = document.getElementById('media-container');
+                mediaContainer.innerHTML = '';
 
-            xhr.send(formData);
-        }
+                // Add an empty div at the top for additional padding
+                const topPadding = document.createElement('div');
+                topPadding.style.height = '100px'; // Adjust this value as needed
+                mediaContainer.appendChild(topPadding);
 
-function loadFiles() {
-  fetch('/api/files')
-    .then(response => response.json())
-    .then(files => {
-      const mediaContainer = document.getElementById('media-container');
-      mediaContainer.innerHTML = '';
+                files.reverse().forEach(file => {
+                    if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                        const mediaItem = createLazyLoadElement(file);
+                        mediaContainer.appendChild(mediaItem);
+                    } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
+                        // Video handling remains the same
+                    }
+                });
 
-      files.forEach(file => {
-        if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
-          const mediaItem = document.createElement('div');
-          mediaItem.className = 'media-item';
-          mediaItem.innerHTML = `
-            <img src="/uploads/${file.thumbnail}" alt="${file.name}" loading="lazy" 
-                 onclick="window.open('/uploads/${file.name}', '_blank')">
-          `;
-          mediaContainer.appendChild(mediaItem);
-        } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
-          // Video handling remains the same
-        }
-      });
-    })
-    .catch(error => console.error('Error loading files:', error));
-}
+                // Initialize lazy loading after adding elements
+                lazyLoad();
+            })
+            .catch(error => console.error('Error loading files:', error));
+    }
 
-        loadFiles();
-    </script>
+    loadFiles();
+
+    // Function to set the correct viewport height
+    function setViewportHeight() {
+        let vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+
+    // Set the height on page load
+    setViewportHeight();
+
+    // Update the height on resize and orientation change
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', setViewportHeight);
+</script>
 </body>
 </html>
+
+
+
+
+
