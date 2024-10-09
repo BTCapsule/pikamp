@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Explorer</title>
     <style>
+	     body {
+		    background-color: black;
+		}
         .file-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -18,6 +21,7 @@
             position: relative;
             overflow: hidden;
             border: 1px solid black;
+            background-color: #f0f0f0; /* Placeholder color */
         }
         .thumbnail img, .thumbnail video {
             position: absolute;
@@ -49,11 +53,10 @@
     checkSessionAuth();
 
     // Set up periodic check every 30 seconds (adjust as needed)
-    setInterval(checkSessionAuth, 30000);
+    setInterval(checkSessionAuth, 3600000);
     </script>
 </head>
 <body>
-  
     <div id="media-files" class="file-grid"></div>
     <div id="other-files" class="other-files"></div>
 
@@ -65,6 +68,75 @@
         function isVideoFile(filename) {
             return /\.(mp4|webm|ogg|mov)$/i.test(filename);
         }
+
+
+
+function createLazyLoadElement(file, isImage) {
+    const div = document.createElement('div');
+    div.className = 'thumbnail';
+    
+    if (isImage) {
+        const img = document.createElement('img');
+        img.className = 'lazy-load';
+        img.dataset.src = `/uploads/${file.thumbnail}`; // Thumbnail for lazy loading
+        img.dataset.fullres = `/uploads/${file.name}`; // Full resolution image URL
+        img.alt = file.name;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        
+        // Add click event to open full-resolution image
+        img.addEventListener('click', function() {
+            window.open(this.dataset.fullres, '_blank');
+        });
+        
+        div.appendChild(img);
+    } else {
+        // Video handling remains the same
+        const video = document.createElement('video');
+        video.className = 'lazy-load';
+        video.dataset.src = `/uploads/${file.name}`;
+        video.controls = true;
+        div.appendChild(video);
+    }
+    
+    return div;
+}
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const element = entry.target;
+                    element.src = element.dataset.src;
+                    element.classList.remove('lazy-load');
+                    observer.unobserve(element);
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        });
+
+function lazyLoad() {
+    const lazyElements = document.querySelectorAll('.lazy-load');
+    lazyElements.forEach(element => {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    if (element.tagName === 'IMG') {
+                        element.src = element.dataset.fullres; // Set to full-resolution image
+                    } else if (element.tagName === 'VIDEO') {
+                        element.src = element.dataset.src;
+                    }
+                    element.classList.remove('lazy-load');
+                    observer.unobserve(element);
+                }
+            });
+        });
+        observer.observe(element);
+    });
+}
 
         function fetchFiles() {
             fetch('/api/files')
@@ -83,31 +155,20 @@
                     otherFiles.innerHTML = '';
                     
                     files.forEach(file => {
-                        if (isImageFile(file) || isVideoFile(file)) {
-                            const div = document.createElement('div');
-                            div.className = 'thumbnail';
-                            
-                            if (isImageFile(file)) {
-                                const img = document.createElement('img');
-                                img.src = `/uploads/${file}`;
-                                img.alt = file;
-                                div.appendChild(img);
-                            } else {
-                                const video = document.createElement('video');
-                                video.src = `/uploads/${file}`;
-                                video.controls = true;
-                                div.appendChild(video);
-                            }
-                            
+                        if (isImageFile(file.name) || isVideoFile(file.name)) {
+                            const div = createLazyLoadElement(file, isImageFile(file.name));
                             mediaFiles.appendChild(div);
                         } else {
                             const a = document.createElement('a');
-                            a.href = `/uploads/${file}`;
-                            a.textContent = file;
+                            a.href = `/uploads/${file.name}`;
+                            a.textContent = file.name;
                             otherFiles.appendChild(a);
                             otherFiles.appendChild(document.createElement('br'));
                         }
                     });
+
+                    // Initialize lazy loading after adding elements
+                    lazyLoad();
                 })
                 .catch(error => {
                     console.error('Error:', error);
