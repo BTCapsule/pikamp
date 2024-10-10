@@ -71,24 +71,79 @@
     padding-top: 60px; /* Padding for the upload button */
 }
 
-.media-grid {
+ .media-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
     gap: 1.5px;
-    padding-top: env(safe-area-inset-top, 50px); /* Padding for top of the content */
+    padding-top: env(safe-area-inset-top, 50px);
+    transition: all 0.3s ease;
 }
 
-    .media-item {
-        position: relative;
-        overflow: hidden;
-        aspect-ratio: 1 / 1;
-    }
+.media-grid.zoom-level-1 {
+    grid-template-columns: repeat(13, 1fr);
+}
+
+.media-grid.zoom-level-2 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.media-grid.zoom-level-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.media-grid.zoom-level-4 {
+    grid-template-columns: repeat(1, 1fr);
+}
+
+         .media-item img {
+            width: 100%;
+              height: 100%;
+             object-fit: cover;
+         }
 
     .media-item img, .media-item video {
         width: 100%;
         height: 100%;
         object-fit: cover;
     }
+
+
+.fullscreen-image {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+	touch-action: none;
+}
+
+.fullscreen-image img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+
+.fullscreen-controls {
+    position: absolute;
+    top: 100px;
+    right: 10px;
+}
+
+.fullscreen-controls button {
+    background-color: rgba(255, 255, 255, 0.5);
+    border: none;
+    color: black;
+    padding: 5px 10px;
+    margin-left: 5px;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+
 
     #upload-progress {
         position: fixed;
@@ -176,30 +231,197 @@
         xhr.send(formData);
     }
 
-    function createLazyLoadElement(file) {
-        const mediaItem = document.createElement('div');
-        mediaItem.className = 'media-item';
+let zoomLevel = 3; // Start at medium high zoom (3 columns)
+const mediaGrid = document.querySelector('.media-grid');
 
-        const img = document.createElement('img');
-        img.className = 'lazy-load';
-        img.dataset.src = `/uploads/${file.thumbnail}`; // Thumbnail for initial loading
-        img.dataset.fullres = `/uploads/${file.name}`; // Full resolution image URL
-        img.alt = file.name;
-        img.loading = 'lazy';
 
-        // Add click event to download full-resolution image
-        img.addEventListener('click', function() {
-            const a = document.createElement('a');
-            a.href = this.dataset.fullres;
-            a.download = file.name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        });
 
-        mediaItem.appendChild(img);
-        return mediaItem;
+function handleZoom(direction) {
+    zoomLevel += direction;
+    if (zoomLevel < 1) zoomLevel = 1;
+    if (zoomLevel > 4) zoomLevel = 4;
+
+    mediaGrid.classList.remove('zoom-level-1', 'zoom-level-2', 'zoom-level-3', 'zoom-level-4');
+    mediaGrid.classList.add(`zoom-level-${zoomLevel}`);
+    
+    console.log('Zoom level:', zoomLevel);
+}
+
+// Update the pinch-to-zoom functionality
+let initialDistance = 0;
+
+document.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        initialDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+        );
     }
+});
+
+document.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+        );
+        
+        if (currentDistance > initialDistance * 4.1) {
+            handleZoom(1); // Zoom out
+        } else if (currentDistance < initialDistance * 0.85) {
+            handleZoom(-1); // Zoom in
+        }
+        
+        initialDistance = currentDistance;
+        e.preventDefault(); // Prevent default browser zoom
+    }
+});
+
+// Add double-tap to zoom functionality
+let lastTap = 0;
+document.addEventListener('touchend', (e) => {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTap;
+    if (tapLength < 300 && tapLength > 0) {
+        handleZoom(1);
+        e.preventDefault();
+    }
+    lastTap = currentTime;
+});
+
+
+
+
+
+
+function openFullscreenImage(img) {
+    const fullscreenDiv = document.createElement('div');
+    fullscreenDiv.className = 'fullscreen-image';
+    
+    const fullImg = document.createElement('img');
+    fullImg.src = img.dataset.fullres;
+    fullImg.alt = img.alt;
+    
+    fullscreenDiv.appendChild(fullImg);
+    document.body.appendChild(fullscreenDiv);
+
+    let currentScale = 1;
+    let startDist = 0;
+    let startX, startY, startTime;
+
+    fullscreenDiv.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            startDist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+        } else if (e.touches.length === 1) {
+            startX = e.touches[0].pageX;
+            startY = e.touches[0].pageY;
+            startTime = new Date().getTime();
+        }
+    });
+
+    fullscreenDiv.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            currentScale = Math.max(1, Math.min(3, currentScale * (dist / startDist)));
+            startDist = dist;
+            fullImg.style.transform = `scale(${currentScale})`;
+        }
+    });
+
+    fullscreenDiv.addEventListener('touchend', (e) => {
+        if (e.changedTouches.length === 1) {
+            const endX = e.changedTouches[0].pageX;
+            const endY = e.changedTouches[0].pageY;
+            const deltaX = endX - startX;
+            const deltaY = endY - startY;
+            const endTime = new Date().getTime();
+            const duration = endTime - startTime;
+
+            if (duration < 300 && Math.abs(deltaY) > 50 && Math.abs(deltaX) < Math.abs(deltaY)) {
+                closeFullscreenImage(fullscreenDiv);
+            }
+        }
+    });
+}
+
+function closeFullscreenImage(fullscreenDiv) {
+    document.body.removeChild(fullscreenDiv);
+}
+
+
+
+function navigateImages(direction) {
+    const images = Array.from(mediaGrid.querySelectorAll('img'));
+    currentImageIndex += direction;
+    if (currentImageIndex < 0) currentImageIndex = images.length - 1;
+    if (currentImageIndex >= images.length) currentImageIndex = 0;
+
+    const newImage = images[currentImageIndex];
+    const fullscreenImg = fullscreenImage.querySelector('img');
+    fullscreenImg.src = newImage.dataset.fullres;
+    fullscreenImg.alt = newImage.alt;
+    fullscreenImg.style.transform = 'scale(1) translate(0px, 0px)';
+}
+
+function handleKeyPress(e) {
+    if (e.key === 'ArrowLeft') navigateImages(-1);
+    if (e.key === 'ArrowRight') navigateImages(1);
+    if (e.key === 'Escape') closeFullscreenImage();
+}
+
+let touchStartX = 0;
+let touchEndX = 0;
+
+function setupSwipeListeners() {
+    fullscreenImage.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+    });
+
+    fullscreenImage.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    });
+}
+
+function handleSwipe() {
+    if (touchEndX < touchStartX) navigateImages(1); // Swipe left
+    if (touchEndX > touchStartX) navigateImages(-1); // Swipe right
+}
+
+
+
+
+
+function createLazyLoadElement(file) {
+    const mediaItem = document.createElement('div');
+    mediaItem.className = 'media-item';
+
+    const img = document.createElement('img');
+    img.className = 'lazy-load';
+    img.dataset.src = `/uploads/${file.thumbnail}`;
+    img.dataset.fullres = `/uploads/${file.name}`;
+    img.alt = file.name;
+    img.loading = 'lazy';
+ img.addEventListener('click', function() {
+        openFullscreenImage(this);
+    });
+
+    mediaItem.appendChild(img);
+    return mediaItem;
+}
+
+
+
+
+
+
 
     function lazyLoad() {
         const lazyElements = document.querySelectorAll('.lazy-load');
@@ -231,50 +453,69 @@
         lazyElements.forEach(element => observer.observe(element));
     }
 
-    function loadFiles() {
-        fetch('/api/files')
-            .then(response => response.json())
-            .then(files => {
-                const mediaContainer = document.getElementById('media-container');
-                mediaContainer.innerHTML = '';
 
-                // Add an empty div at the top for additional padding
-                const topPadding = document.createElement('div');
-                topPadding.style.height = '100px'; // Adjust this value as needed
-                mediaContainer.appendChild(topPadding);
 
-                files.reverse().forEach(file => {
-                    if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                        const mediaItem = createLazyLoadElement(file);
-                        mediaContainer.appendChild(mediaItem);
-                    } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
-                        // Video handling remains the same
-                    }
-                });
 
-                // Initialize lazy loading after adding elements
-                lazyLoad();
-            })
-            .catch(error => console.error('Error loading files:', error));
-    }
 
-    loadFiles();
 
-    // Function to set the correct viewport height
-    function setViewportHeight() {
-        let vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-    }
 
-    // Set the height on page load
+
+function loadFiles() {
+    fetch('/api/files')
+        .then(response => response.json())
+        .then(files => {
+            const mediaContainer = document.getElementById('media-container');
+            mediaContainer.innerHTML = '';
+
+            files.reverse().forEach(file => {
+                if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    const mediaItem = createLazyLoadElement(file);
+                    mediaContainer.appendChild(mediaItem);
+                } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
+                    // Video handling remains the same
+                }
+            });
+
+            // Initialize lazy loading after adding elements
+            lazyLoad();
+            handleZoom(0); // Apply initial zoom class
+        })
+        .catch(error => console.error('Error loading files:', error));
+}
+
+
+
+
+
+
+
+
+// Function to set the correct viewport height
+function setViewportHeight() {
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+
+window.addEventListener('resize', () => {
+    handleZoom(0);
     setViewportHeight();
+});
+window.addEventListener('orientationchange', () => {
+    handleZoom(0);
+    setViewportHeight();
+});
 
-    // Update the height on resize and orientation change
-    window.addEventListener('resize', setViewportHeight);
-    window.addEventListener('orientationchange', setViewportHeight);
+// Initial calls
+handleZoom(0);
+setViewportHeight();
+loadFiles();
 </script>
 </body>
 </html>
+
+
+
+
 
 
 
