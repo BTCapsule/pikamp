@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="test.jpeg">
@@ -28,21 +28,6 @@
         background-color: black;
     }
 
-    /* Message container styles */
-    .message {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        padding: 20px;
-        background-color: white;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        margin: 20px;
-    }
-
     .upload-btn {
         position: fixed;
         top: 60px;
@@ -62,93 +47,55 @@
         display: none;
     }
 
+    .media-container {
+        height: 100%;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column-reverse;
+        padding-top: 60px;
+    }
 
-.media-container {
-    height: 100%;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column-reverse;
-    padding-top: 60px; /* Padding for the upload button */
-}
+    .media-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
 
+    .media-item {
+        box-sizing: border-box;
+        padding: 0.5em;
+    }
 
+    .zoom-1 .media-item { width: 7.69%; }
+    .zoom-2 .media-item { width: 20%; }
+    .zoom-3 .media-item { width: 33.33%; }
+    .zoom-4 .media-item { width: 100%; }
 
-
-
-
-.media-grid {
-    display: grid;
-    gap: 1.5px;
-    padding-top: env(safe-area-inset-top, 50px);
-    transition: all 2s ease;
-}
-
-.media-grid.zoom-level-1 {
-    grid-template-columns: repeat(13, 1fr);
-}
-
-.media-grid.zoom-level-2 {
-    grid-template-columns: repeat(5, 1fr);
-}
-
-.media-grid.zoom-level-3 {
-    grid-template-columns: repeat(3, 1fr);
-}
-
-.media-grid.zoom-level-4 {
-    grid-template-columns: repeat(1, 1fr);
-}
-
-         .media-item img {
-            width: 100%;
-              height: 100%;
-             object-fit: cover;
-         }
-
-    .media-item img, .media-item video {
+    .media-item img {
         width: 100%;
         height: 100%;
         object-fit: cover;
     }
 
+    .fullscreen-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        touch-action: none;
+    }
 
-.fullscreen-image {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.9);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-	touch-action: none;
-}
-
-.fullscreen-image img {
-    max-width: 90%;
-    max-height: 90%;
-    object-fit: contain;
-}
-
-.fullscreen-controls {
-    position: absolute;
-    top: 100px;
-    right: 10px;
-}
-
-.fullscreen-controls button {
-    background-color: rgba(255, 255, 255, 0.5);
-    border: none;
-    color: black;
-    padding: 5px 10px;
-    margin-left: 5px;
-    cursor: pointer;
-    font-size: 18px;
-}
-
-
+    .fullscreen-overlay img {
+        max-width: 90%;
+        max-height: 90%;
+        object-fit: contain;
+    }
 
     #upload-progress {
         position: fixed;
@@ -171,6 +118,9 @@
     </div>
 
 <script>
+    let zoomLevel = 3; // Start at medium zoom (3 columns)
+    const mediaGrid = document.querySelector('.media-grid');
+
     function getCookies() {
         const cookies = {};
         document.cookie.split(';').forEach(cookie => {
@@ -235,212 +185,118 @@
 
         xhr.send(formData);
     }
-let zoomLevel = 3; // Start at medium high zoom (3 columns)
-const mediaGrid = document.querySelector('.media-grid');
 
-function handleZoom(direction) {
-    zoomLevel += direction;
-    if (zoomLevel < 1) zoomLevel = 1;
-    if (zoomLevel > 4) zoomLevel = 4;
-
-    mediaGrid.classList.remove('zoom-level-1', 'zoom-level-2', 'zoom-level-3', 'zoom-level-4');
-    mediaGrid.classList.add(`zoom-level-${zoomLevel}`);
-    
-    console.log('Zoom level:', zoomLevel);
-}
-
-let initialDistance = 0;
-let zoomTimeout = null;
-const zoomThreshold = 0.15; // 15% change required to trigger zoom
-const debounceDelay = 100; // 100ms delay for debounce
-
-function debounce(func, delay) {
-    return function() {
-        const context = this;
-        const args = arguments;
-        clearTimeout(zoomTimeout);
-        zoomTimeout = setTimeout(() => func.apply(context, args), delay);
-    };
-}
-
-const debouncedHandleZoom = debounce(handleZoom, debounceDelay);
-
-document.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-        e.preventDefault(); // Prevent default browser behavior
-        initialDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-        );
-    }
-});
-
-document.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-        e.preventDefault(); // Prevent default browser behavior
-        const currentDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-        );
+    function handleZoom(zoomChange) {
+        zoomLevel += zoomChange;
+        if (zoomLevel < 1) zoomLevel = 1;
+        if (zoomLevel > 4) zoomLevel = 4;
         
-        const distanceRatio = currentDistance / initialDistance;
-        
-        if (distanceRatio > 1 + zoomThreshold) {
-            debouncedHandleZoom(1); // Zoom in (fewer columns)
-        } else if (distanceRatio < 1 - zoomThreshold) {
-            debouncedHandleZoom(-1); // Zoom out (more columns)
-        }
+        mediaGrid.classList.remove('zoom-1', 'zoom-2', 'zoom-3', 'zoom-4');
+        mediaGrid.classList.add(`zoom-${zoomLevel}`);
     }
-});
 
+    let initialDistance = 0;
+    let zoomTimeout = null;
+    const zoomThreshold = 0.15;
+    const debounceDelay = 100;
 
+    function debounce(func, delay) {
+        return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(zoomTimeout);
+            zoomTimeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
 
+    const debouncedHandleZoom = debounce(handleZoom, debounceDelay);
 
-
-
-
-
-
-
-
-
-
-
-function openFullscreenImage(img) {
-    const fullscreenDiv = document.createElement('div');
-    fullscreenDiv.className = 'fullscreen-image';
-    
-    const fullImg = document.createElement('img');
-    fullImg.src = img.dataset.fullres;
-    fullImg.alt = img.alt;
-    
-    fullscreenDiv.appendChild(fullImg);
-    document.body.appendChild(fullscreenDiv);
-
-    let currentScale = 1;
-    let startDist = 0;
-    let startX, startY, startTime;
-
-    fullscreenDiv.addEventListener('click', (e) => {
-        // Only close if it's a single click (not part of a zoom gesture)
-        if (e.detail === 1) {
-            closeFullscreenImage(fullscreenDiv);
-        }
-    });
-
-    fullscreenDiv.addEventListener('touchstart', (e) => {
+    document.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
-            startDist = Math.hypot(
+            initialDistance = Math.hypot(
                 e.touches[0].pageX - e.touches[1].pageX,
                 e.touches[0].pageY - e.touches[1].pageY
             );
-        } else if (e.touches.length === 1) {
-            startX = e.touches[0].pageX;
-            startY = e.touches[0].pageY;
-            startTime = new Date().getTime();
         }
     });
 
-    fullscreenDiv.addEventListener('touchmove', (e) => {
+    document.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2) {
-            e.preventDefault();
-            const dist = Math.hypot(
+            const currentDistance = Math.hypot(
                 e.touches[0].pageX - e.touches[1].pageX,
                 e.touches[0].pageY - e.touches[1].pageY
             );
-            currentScale = Math.max(1, Math.min(3, currentScale * (dist / startDist)));
-            startDist = dist;
-            fullImg.style.transform = `scale(${currentScale})`;
-        }
-    });
-
-    fullscreenDiv.addEventListener('touchend', (e) => {
-        if (e.changedTouches.length === 1) {
-            const endX = e.changedTouches[0].pageX;
-            const endY = e.changedTouches[0].pageY;
-            const deltaX = endX - startX;
-            const deltaY = endY - startY;
-            const endTime = new Date().getTime();
-            const duration = endTime - startTime;
-
-            if (duration < 300 && Math.abs(deltaY) > 50 && Math.abs(deltaX) < Math.abs(deltaY)) {
-                closeFullscreenImage(fullscreenDiv);
+            
+            const distanceRatio = currentDistance / initialDistance;
+            
+            if (distanceRatio > 1 + zoomThreshold) {
+                debouncedHandleZoom(1);
+            } else if (distanceRatio < 1 - zoomThreshold) {
+                debouncedHandleZoom(-1);
             }
         }
     });
-}
 
-function closeFullscreenImage(fullscreenDiv) {
-    document.body.removeChild(fullscreenDiv);
-}
-
-
-
-function navigateImages(direction) {
-    const images = Array.from(mediaGrid.querySelectorAll('img'));
-    currentImageIndex += direction;
-    if (currentImageIndex < 0) currentImageIndex = images.length - 1;
-    if (currentImageIndex >= images.length) currentImageIndex = 0;
-
-    const newImage = images[currentImageIndex];
-    const fullscreenImg = fullscreenImage.querySelector('img');
-    fullscreenImg.src = newImage.dataset.fullres;
-    fullscreenImg.alt = newImage.alt;
-    fullscreenImg.style.transform = 'scale(1) translate(0px, 0px)';
-}
-
-function handleKeyPress(e) {
-    if (e.key === 'ArrowLeft') navigateImages(-1);
-    if (e.key === 'ArrowRight') navigateImages(1);
-    if (e.key === 'Escape') closeFullscreenImage();
-}
-
-let touchStartX = 0;
-let touchEndX = 0;
-
-function setupSwipeListeners() {
-    fullscreenImage.addEventListener('touchstart', e => {
-        touchStartX = e.changedTouches[0].screenX;
-    });
-
-    fullscreenImage.addEventListener('touchend', e => {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-    });
-}
-
-function handleSwipe() {
-    if (touchEndX < touchStartX) navigateImages(1); // Swipe left
-    if (touchEndX > touchStartX) navigateImages(-1); // Swipe right
-}
-
-
-
-
-function createLazyLoadElement(file) {
-    const mediaItem = document.createElement('div');
-    mediaItem.className = 'media-item';
-
-    const img = document.createElement('img');
-    img.className = 'lazy-load';
-    img.dataset.src = `/uploads/${file.thumbnail}`;
-    img.dataset.fullres = `/uploads/${file.name}`;
-    img.alt = file.name;
-    img.loading = 'lazy';
-    img.addEventListener('click', function(e) {
-	e.preventDefault();
-	e.stopPropagation();
-        openFullscreenImage(this);
-    });
-
-    mediaItem.appendChild(img);
-    return mediaItem;
-}
+   
 
 
 
 
 
+
+    function openFullscreenImage(img) {
+        const overlay = document.createElement('div');
+        overlay.className = 'fullscreen-overlay';
+        overlay.innerHTML = `<img src="${img.dataset.fullres}" alt="Fullscreen image">`;
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', () => closeFullscreenImage(overlay));
+
+        let startY;
+        let startTime;
+
+        overlay.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            startTime = Date.now();
+        });
+
+        overlay.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling
+        });
+
+        overlay.addEventListener('touchend', (e) => {
+            const endY = e.changedTouches[0].clientY;
+            const deltaY = endY - startY;
+            const deltaTime = Date.now() - startTime;
+
+            if (deltaTime < 300 && Math.abs(deltaY) > 100) {
+                closeFullscreenImage(overlay);
+            }
+        });
+    }
+
+    function closeFullscreenImage(fullscreenDiv) {
+        document.body.removeChild(fullscreenDiv);
+    }
+
+    function createLazyLoadElement(file) {
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item';
+
+        const img = document.createElement('img');
+        img.className = 'lazy-load';
+        img.dataset.src = `/uploads/${file.thumbnail}`;
+        img.dataset.fullres = `/uploads/${file.name}`;
+        img.alt = file.name;
+        img.loading = 'lazy';
+        img.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openFullscreenImage(this);
+        });
+
+        mediaItem.appendChild(img);
+        return mediaItem;
+    }
 
     function lazyLoad() {
         const lazyElements = document.querySelectorAll('.lazy-load');
@@ -450,7 +306,6 @@ function createLazyLoadElement(file) {
                     const img = entry.target;
                     img.src = img.dataset.src;
 
-                    // After 3 seconds, replace with full-resolution image
                     setTimeout(() => {
                         const fullResImg = new Image();
                         fullResImg.onload = function() {
@@ -472,62 +327,45 @@ function createLazyLoadElement(file) {
         lazyElements.forEach(element => observer.observe(element));
     }
 
+    function loadFiles() {
+        fetch('/api/files')
+            .then(response => response.json())
+            .then(files => {
+                const mediaContainer = document.getElementById('media-container');
+                mediaContainer.innerHTML = '';
 
+                files.reverse().forEach(file => {
+                    if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                        const mediaItem = createLazyLoadElement(file);
+                        mediaContainer.appendChild(mediaItem);
+                    }
+                });
 
+                lazyLoad();
+                handleZoom(0);
+            })
+            .catch(error => console.error('Error loading files:', error));
+    }
 
+    function setViewportHeight() {
+        let vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
 
+    window.addEventListener('resize', () => {
+        handleZoom(0);
+        setViewportHeight();
+    });
 
+    window.addEventListener('orientationchange', () => {
+        handleZoom(0);
+        setViewportHeight();
+    });
 
-
-function loadFiles() {
-    fetch('/api/files')
-        .then(response => response.json())
-        .then(files => {
-            const mediaContainer = document.getElementById('media-container');
-            mediaContainer.innerHTML = '';
-
-            files.reverse().forEach(file => {
-                if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                    const mediaItem = createLazyLoadElement(file);
-                    mediaContainer.appendChild(mediaItem);
-                } else if (file.name.match(/\.(mp4|webm|ogg)$/i)) {
-                    // Video handling remains the same
-                }
-            });
-
-            // Initialize lazy loading after adding elements
-            lazyLoad();
-            handleZoom(0); // Apply initial zoom class
-        })
-        .catch(error => console.error('Error loading files:', error));
-}
-
-
-
-
-
-
-
-
-// Function to set the correct viewport height
-function setViewportHeight() {
-    let vh = window.innerHeight * 0.01;
-    document.documentElement.style.setProperty('--vh', `${vh}px`);
-}
-
-window.addEventListener('resize', () => {
+    // Initial calls
     handleZoom(0);
     setViewportHeight();
-});
-window.addEventListener('orientationchange', () => {
-    handleZoom(0);
-    setViewportHeight();
-});
-
-// Initial calls
-handleZoom(0);
-setViewportHeight();
-loadFiles();
+    loadFiles();
 </script>
 </body>
 </html>
