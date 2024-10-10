@@ -71,11 +71,16 @@
     padding-top: 60px; /* Padding for the upload button */
 }
 
- .media-grid {
+
+
+
+
+
+.media-grid {
     display: grid;
     gap: 1.5px;
     padding-top: env(safe-area-inset-top, 50px);
-    transition: all 0.3s ease;
+    transition: all 2s ease;
 }
 
 .media-grid.zoom-level-1 {
@@ -230,11 +235,8 @@
 
         xhr.send(formData);
     }
-
 let zoomLevel = 3; // Start at medium high zoom (3 columns)
 const mediaGrid = document.querySelector('.media-grid');
-
-
 
 function handleZoom(direction) {
     zoomLevel += direction;
@@ -247,11 +249,25 @@ function handleZoom(direction) {
     console.log('Zoom level:', zoomLevel);
 }
 
-// Update the pinch-to-zoom functionality
 let initialDistance = 0;
+let zoomTimeout = null;
+const zoomThreshold = 0.15; // 15% change required to trigger zoom
+const debounceDelay = 100; // 100ms delay for debounce
+
+function debounce(func, delay) {
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(zoomTimeout);
+        zoomTimeout = setTimeout(() => func.apply(context, args), delay);
+    };
+}
+
+const debouncedHandleZoom = debounce(handleZoom, debounceDelay);
 
 document.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
+        e.preventDefault(); // Prevent default browser behavior
         initialDistance = Math.hypot(
             e.touches[0].pageX - e.touches[1].pageX,
             e.touches[0].pageY - e.touches[1].pageY
@@ -261,33 +277,29 @@ document.addEventListener('touchstart', (e) => {
 
 document.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
+        e.preventDefault(); // Prevent default browser behavior
         const currentDistance = Math.hypot(
             e.touches[0].pageX - e.touches[1].pageX,
             e.touches[0].pageY - e.touches[1].pageY
         );
         
-        if (currentDistance > initialDistance * 4.1) {
-            handleZoom(1); // Zoom out
-        } else if (currentDistance < initialDistance * 0.85) {
-            handleZoom(-1); // Zoom in
-        }
+        const distanceRatio = currentDistance / initialDistance;
         
-        initialDistance = currentDistance;
-        e.preventDefault(); // Prevent default browser zoom
+        if (distanceRatio > 1 + zoomThreshold) {
+            debouncedHandleZoom(1); // Zoom in (fewer columns)
+        } else if (distanceRatio < 1 - zoomThreshold) {
+            debouncedHandleZoom(-1); // Zoom out (more columns)
+        }
     }
 });
 
-// Add double-tap to zoom functionality
-let lastTap = 0;
-document.addEventListener('touchend', (e) => {
-    const currentTime = new Date().getTime();
-    const tapLength = currentTime - lastTap;
-    if (tapLength < 300 && tapLength > 0) {
-        handleZoom(1);
-        e.preventDefault();
-    }
-    lastTap = currentTime;
-});
+
+
+
+
+
+
+
 
 
 
@@ -308,6 +320,13 @@ function openFullscreenImage(img) {
     let currentScale = 1;
     let startDist = 0;
     let startX, startY, startTime;
+
+    fullscreenDiv.addEventListener('click', (e) => {
+        // Only close if it's a single click (not part of a zoom gesture)
+        if (e.detail === 1) {
+            closeFullscreenImage(fullscreenDiv);
+        }
+    });
 
     fullscreenDiv.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
@@ -398,7 +417,6 @@ function handleSwipe() {
 
 
 
-
 function createLazyLoadElement(file) {
     const mediaItem = document.createElement('div');
     mediaItem.className = 'media-item';
@@ -409,14 +427,15 @@ function createLazyLoadElement(file) {
     img.dataset.fullres = `/uploads/${file.name}`;
     img.alt = file.name;
     img.loading = 'lazy';
- img.addEventListener('click', function() {
+    img.addEventListener('click', function(e) {
+	e.preventDefault();
+	e.stopPropagation();
         openFullscreenImage(this);
     });
 
     mediaItem.appendChild(img);
     return mediaItem;
 }
-
 
 
 
@@ -512,8 +531,6 @@ loadFiles();
 </script>
 </body>
 </html>
-
-
 
 
 
