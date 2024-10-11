@@ -11,6 +11,11 @@
     <meta name="apple-mobile-web-app-title" content="Photos">
 
     <title>Photos</title>
+    
+    <!-- PhotoSwipe CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/default-skin/default-skin.min.css">
+
     <style>
     /* Global styles */
     html, body {
@@ -47,54 +52,51 @@
         display: none;
     }
 
-    .media-container {
-        height: 100%;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column-reverse;
-        padding-top: 60px;
-    }
+.media-container {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
 
-    .media-grid {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-start;
-    }
 
-    .media-item {
-        box-sizing: border-box;
-        padding: 0.5em;
-    }
 
-    .zoom-1 .media-item { width: 7.69%; }
-    .zoom-2 .media-item { width: 20%; }
-    .zoom-3 .media-item { width: 33.33%; }
-    .zoom-4 .media-item { width: 100%; }
+
+.media-grid {
+    display: grid;
+    gap: 2px;
+    padding: 2px;
+    grid-template-columns: repeat(var(--columns, 5), 1fr);
+    transition: all 0.3s ease;
+}
+
+.media-grid.zoom-1 { --columns: 13; }
+.media-grid.zoom-2 { --columns: 5; }
+.media-grid.zoom-3 { --columns: 3; }
+.media-grid.zoom-4 { --columns: 1  }
+
+.media-item {
+    box-sizing: border-box;
+    padding: 0;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: 2px;
+}
+/*
+    .media-grid.zoom-1 { grid-template-columns: repeat(13, 1fr); }
+    .media-grid.zoom-2 { grid-template-columns: repeat(5, 1fr); }
+    .media-grid.zoom-3 { grid-template-columns: repeat(3, 1fr); }
+    .media-grid.zoom-4 { grid-template-columns: repeat(1, 1fr); }
+
+*/
 
     .media-item img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-    }
-
-    .fullscreen-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-        touch-action: none;
-    }
-
-    .fullscreen-overlay img {
-        max-width: 90%;
-        max-height: 90%;
-        object-fit: contain;
+        display: block;
     }
 
     #upload-progress {
@@ -117,10 +119,47 @@
         <div class="media-grid" id="media-container"></div>
     </div>
 
-<script>
-    let zoomLevel = 3; // Start at medium zoom (3 columns)
-    const mediaGrid = document.querySelector('.media-grid');
+    <!-- PhotoSwipe HTML structure -->
+    <div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="pswp__bg"></div>
+        <div class="pswp__scroll-wrap">
+            <div class="pswp__container">
+                <div class="pswp__item"></div>
+                <div class="pswp__item"></div>
+                <div class="pswp__item"></div>
+            </div>
+            <div class="pswp__ui pswp__ui--hidden">
+                <div class="pswp__top-bar">
+                    <div class="pswp__counter"></div>
+                    <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+                    <button class="pswp__button pswp__button--share" title="Share"></button>
+                    <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+                    <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+                    <div class="pswp__preloader">
+                        <div class="pswp__preloader__icn">
+                            <div class="pswp__preloader__cut">
+                                <div class="pswp__preloader__donut"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                    <div class="pswp__share-tooltip"></div>
+                </div>
+                <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)"></button>
+                <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button>
+                <div class="pswp__caption">
+                    <div class="pswp__caption__center"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- PhotoSwipe JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe-ui-default.min.js"></script>
+
+    <script>
     function getCookies() {
         const cookies = {};
         document.cookie.split(';').forEach(cookie => {
@@ -185,118 +224,52 @@
 
         xhr.send(formData);
     }
+	
+	
+	
 
-    function handleZoom(zoomChange) {
-        zoomLevel += zoomChange;
-        if (zoomLevel < 1) zoomLevel = 1;
-        if (zoomLevel > 4) zoomLevel = 4;
-        
-        mediaGrid.classList.remove('zoom-1', 'zoom-2', 'zoom-3', 'zoom-4');
-        mediaGrid.classList.add(`zoom-${zoomLevel}`);
-    }
+    let zoomLevel = 3;
+    const mediaGrid = document.querySelector('.media-grid');
 
-    let initialDistance = 0;
-    let zoomTimeout = null;
-    const zoomThreshold = 0.15;
-    const debounceDelay = 100;
+function updateZoomClass() {
+    let columns;
+    if (zoomLevel <= 1.5) columns = 13;
+    else if (zoomLevel <= 2.5) columns = 5;
+    else if (zoomLevel <= 3.5) columns = 3;
+    else columns = 1;
 
-    function debounce(func, delay) {
-        return function() {
-            const context = this;
-            const args = arguments;
-            clearTimeout(zoomTimeout);
-            zoomTimeout = setTimeout(() => func.apply(context, args), delay);
-        };
-    }
-
-    const debouncedHandleZoom = debounce(handleZoom, debounceDelay);
-
-    document.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-            initialDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-        }
-    });
-
-    document.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2) {
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            
-            const distanceRatio = currentDistance / initialDistance;
-            
-            if (distanceRatio > 1 + zoomThreshold) {
-                debouncedHandleZoom(1);
-            } else if (distanceRatio < 1 - zoomThreshold) {
-                debouncedHandleZoom(-1);
-            }
-        }
-    });
-
+    mediaGrid.style.setProperty('--columns', columns);
+    mediaGrid.classList.remove('zoom-1', 'zoom-2', 'zoom-3', 'zoom-4');
+    mediaGrid.classList.add(`zoom-${Math.ceil(zoomLevel)}`);
+    console.log("Applied zoom class:", `zoom-${Math.ceil(zoomLevel)}`);
+    
+    // Add this line to apply the transition
    
+}
 
 
 
+function handleZoom(zoomChange) {
+    zoomLevel = Math.max(1, Math.min(4, zoomLevel + zoomChange));
+    zoomLevel = Math.round(zoomLevel * 10) / 10; // Round to nearest 0.1
+    console.log("Current zoom level:", zoomLevel);
+    updateZoomClass();
+}
 
 
+function createLazyLoadElement(file) {
+    const mediaItem = document.createElement('div');
+    mediaItem.className = 'media-item';
 
-    function openFullscreenImage(img) {
-        const overlay = document.createElement('div');
-        overlay.className = 'fullscreen-overlay';
-        overlay.innerHTML = `<img src="${img.dataset.fullres}" alt="Fullscreen image">`;
-        document.body.appendChild(overlay);
-
-        overlay.addEventListener('click', () => closeFullscreenImage(overlay));
-
-        let startY;
-        let startTime;
-
-        overlay.addEventListener('touchstart', (e) => {
-            startY = e.touches[0].clientY;
-            startTime = Date.now();
-        });
-
-        overlay.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Prevent scrolling
-        });
-
-        overlay.addEventListener('touchend', (e) => {
-            const endY = e.changedTouches[0].clientY;
-            const deltaY = endY - startY;
-            const deltaTime = Date.now() - startTime;
-
-            if (deltaTime < 300 && Math.abs(deltaY) > 100) {
-                closeFullscreenImage(overlay);
-            }
-        });
-    }
-
-    function closeFullscreenImage(fullscreenDiv) {
-        document.body.removeChild(fullscreenDiv);
-    }
-
-    function createLazyLoadElement(file) {
-        const mediaItem = document.createElement('div');
-        mediaItem.className = 'media-item';
-
-        const img = document.createElement('img');
-        img.className = 'lazy-load';
-        img.dataset.src = `/uploads/${file.thumbnail}`;
-        img.dataset.fullres = `/uploads/${file.name}`;
-        img.alt = file.name;
-        img.loading = 'lazy';
-        img.addEventListener('click', function(e) {
-            e.stopPropagation();
-            openFullscreenImage(this);
-        });
-
-        mediaItem.appendChild(img);
-        return mediaItem;
-    }
+    const img = document.createElement('img');
+    img.className = 'lazy-load';
+    img.dataset.src = `/uploads/${file.name}`; // Use full-res image
+    img.alt = file.name;
+    img.loading = 'lazy';
+    
+    mediaItem.appendChild(img);
+    return mediaItem;
+}
 
     function lazyLoad() {
         const lazyElements = document.querySelectorAll('.lazy-load');
@@ -305,15 +278,6 @@
                 if (entry.isIntersecting) {
                     const img = entry.target;
                     img.src = img.dataset.src;
-
-                    setTimeout(() => {
-                        const fullResImg = new Image();
-                        fullResImg.onload = function() {
-                            img.src = img.dataset.fullres;
-                        };
-                        fullResImg.src = img.dataset.fullres;
-                    }, 3000);
-
                     img.classList.remove('lazy-load');
                     observer.unobserve(img);
                 }
@@ -327,48 +291,127 @@
         lazyElements.forEach(element => observer.observe(element));
     }
 
-    function loadFiles() {
-        fetch('/api/files')
-            .then(response => response.json())
-            .then(files => {
-                const mediaContainer = document.getElementById('media-container');
-                mediaContainer.innerHTML = '';
+let loadedFiles = [];
 
-                files.reverse().forEach(file => {
-                    if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                        const mediaItem = createLazyLoadElement(file);
-                        mediaContainer.appendChild(mediaItem);
-                    }
-                });
+function loadFiles() {
+    fetch('/api/files')
+        .then(response => response.json())
+        .then(files => {
+            const mediaContainer = document.getElementById('media-container');
+            
+            // Only add new files
+            const newFiles = files.filter(file => !loadedFiles.some(loadedFile => loadedFile.name === file.name));
+            
+            newFiles.reverse().forEach(file => {
+                if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    const mediaItem = createLazyLoadElement(file);
+                    mediaContainer.appendChild(mediaItem);
+                }
+            });
 
-                lazyLoad();
-                handleZoom(0);
-            })
-            .catch(error => console.error('Error loading files:', error));
+            loadedFiles = loadedFiles.concat(newFiles);
+
+            lazyLoad();
+            updateZoomClass();
+            initPhotoSwipe(loadedFiles.map(file => ({
+                src: `/uploads/${file.name}`,
+                w: 0,
+                h: 0
+            })));
+        })
+        .catch(error => console.error('Error loading files:', error));
+}
+
+    function initPhotoSwipe(items) {
+        const mediaItems = document.querySelectorAll('.media-item');
+        mediaItems.forEach((item, index) => {
+            item.onclick = function(e) {
+                e.preventDefault();
+                openPhotoSwipe(index, items);
+            };
+        });
     }
 
-    function setViewportHeight() {
-        let vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    function openPhotoSwipe(index, items) {
+        const pswpElement = document.querySelector('.pswp');
+        const options = {
+            index: index,
+            bgOpacity: 0.85,
+            showHideOpacity: true,
+            getThumbBoundsFn: function(index) {
+                const thumbnail = document.querySelectorAll('.media-item img')[index];
+                const pageYScroll = window.pageYOffset || document.documentElement.scrollTop;
+                const rect = thumbnail.getBoundingClientRect();
+                return {x:rect.left, y:rect.top + pageYScroll, w:rect.width};
+            }
+        };
+
+        const gallery = new PhotoSwipe(pswpElement, PhotoSwipeUI_Default, items, options);
+        
+        gallery.listen('gettingData', function(index, item) {
+            if (!item.w || !item.h) {
+                const img = new Image();
+                img.onload = function() {
+                    item.w = this.width;
+                    item.h = this.height;
+                    gallery.updateSize(true);
+                };
+                img.src = item.src;
+            }
+        });
+
+        gallery.init();
     }
-
-    window.addEventListener('resize', () => {
-        handleZoom(0);
-        setViewportHeight();
-    });
-
-    window.addEventListener('orientationchange', () => {
-        handleZoom(0);
-        setViewportHeight();
-    });
 
     // Initial calls
-    handleZoom(0);
-    setViewportHeight();
+    zoomLevel = 3; // Start with 3 columns
+    updateZoomClass();
     loadFiles();
+
+
+
+
+
+
+
+    // Event listeners for pinch-to-zoom
+    let initialDistance = 0;
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialDistance = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+        }
+    });
+
+document.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+        );
+        
+        const distanceRatio = currentDistance / initialDistance;
+        
+        if (distanceRatio > 1.1 && zoomLevel < 4) {
+            handleZoom(0.1); // Zoom in
+        } else if (distanceRatio < 0.9 && zoomLevel > 1) {
+            handleZoom(-0.1); // Zoom out
+        }
+        // No else condition, so it won't default to zoom level 4
+        e.preventDefault(); // Prevent default touch behavior
+    }
+});
+
+    document.addEventListener('touchend', () => {
+        zoomLevel = Math.round(zoomLevel);
+        updateZoomClass();
+    });
 </script>
 </body>
 </html>
+
 
 
 
