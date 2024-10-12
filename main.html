@@ -55,6 +55,7 @@
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
+	padding-bottom: 100px;
 }
 
 
@@ -182,7 +183,24 @@
 	
 	
 	
-	
+	function continuousScrollToImage(index) {
+    const mediaItems = document.querySelectorAll('.media-item');
+    if (mediaItems[index]) {
+        const mediaContainer = document.querySelector('.media-container');
+        const targetElement = mediaItems[index];
+        const containerRect = mediaContainer.getBoundingClientRect();
+        const targetRect = targetElement.getBoundingClientRect();
+
+        const scrollTop = mediaContainer.scrollTop + targetRect.top - containerRect.top - (containerRect.height / 2) + (targetRect.height / 2);
+
+        mediaContainer.scrollTo({
+            top: scrollTop,
+            behavior: 'auto'
+        });
+
+        toggleActiveImage(mediaItems[index]);
+    }
+}
 	
 	
 	
@@ -194,13 +212,24 @@ function exitSingleColumnView() {
     }
 }
 
-    function scrollToImage(index) {
-        const mediaItems = document.querySelectorAll('.media-item');
-        if (mediaItems[index]) {
-            mediaItems[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            toggleActiveImage(mediaItems[index]);
-        }
+function scrollToImage(index) {
+    const mediaItems = document.querySelectorAll('.media-item');
+    if (mediaItems[index]) {
+        const mediaContainer = document.querySelector('.media-container');
+        const targetElement = mediaItems[index];
+        const containerRect = mediaContainer.getBoundingClientRect();
+        const targetRect = targetElement.getBoundingClientRect();
+
+        const scrollTop = mediaContainer.scrollTop + targetRect.top - containerRect.top - (containerRect.height / 2) + (targetRect.height / 2);
+
+        mediaContainer.scrollTo({
+            top: scrollTop,
+            behavior: 'smooth'
+        });
+
+        toggleActiveImage(mediaItems[index]);
     }
+}
 
     function toggleActiveImage(clickedItem) {
         document.querySelectorAll('.media-item').forEach(item => {
@@ -221,7 +250,7 @@ function exitSingleColumnView() {
                 const newFiles = files.filter(file => !loadedFiles.some(loadedFile => loadedFile.name === file.name));
                 
                 newFiles.reverse().forEach(file => {
-                    if (file.name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    if (file.name.match(/\.(jpg|jpeg|png|gif|mov)$/i)) {
                         const mediaItem = createLazyLoadElement(file);
                         mediaContainer.appendChild(mediaItem);
                     }
@@ -296,8 +325,7 @@ function scrollToBottom() {
 
 
 
-let zoomLevel = 2; // Start with 5 columns (zoom level 1)
-let singleColumnView = false; // Flag for single column view
+let zoomLevel = 2;
 const mediaGrid = document.querySelector('.media-grid');
 
 function updateZoomClass() {
@@ -314,8 +342,6 @@ function updateZoomClass() {
     console.log("Applied zoom class:", singleColumnView ? 'zoom-3' : `zoom-${zoomLevel}`);
 }
 
-let zoomOutThreshold = 0; // Accumulator for zoom out gestures
-
 let lastTouchTime = 0;
 
 function getContainerScale() {
@@ -326,54 +352,81 @@ function getContainerScale() {
 }
 
 
+
+let scrollAnimationId = null;
+let isZoomLevel1 = true;
 let isZoomLevel2 = false;
-
-
-
+let isZoomLevel3 = false;
+let zoomOutThreshold = 0;
+let initialZoomImage = null;
+let isZooming = false;
+let singleColumnView = false;
 function handleZoom(zoomChange, timeDelta) {
+    const mediaGrid = document.querySelector('.media-grid');
     const containerScale = getContainerScale();
-    const zoomSpeed = Math.abs(zoomChange) / timeDelta * 1000; // zoomSpeed in units per second
+    const zoomSpeed = Math.abs(zoomChange) / timeDelta * 1000;
     
     if (singleColumnView) {
-        // Only allow zooming out if the container is at full scale and the zoom speed is not too high
-        if (zoomChange < 0 && containerScale >= 0.99 && zoomSpeed < 4) { // Adjust the speed threshold as needed
+        if (zoomChange < 0 && containerScale >= 0.99 && zoomSpeed < 4) {
             zoomOutThreshold += zoomChange;
             console.log("Zoom out threshold:", zoomOutThreshold);
             
-            // Exit single column view if threshold is reached
             if (zoomOutThreshold < -0.3) {
                 singleColumnView = false;
-                zoomLevel = 2; // Set to 3 columns when exiting single column view
-                zoomOutThreshold = 0; // Reset the threshold
+                zoomLevel = 2;
+                zoomOutThreshold = 0;
+                
+                // Capture the current image when transitioning from zoom level 3 to 2
+                const touch = event.touches[0];
+                initialZoomImage = document.elementFromPoint(touch.clientX, touch.clientY).closest('.media-item');
+                isZooming = true;
             }
         } else {
-            // Reset threshold if zooming in or container is not at full scale
             zoomOutThreshold = 0;
         }
     } else {
-        // Only allow zooming if the container is at full scale and the zoom speed is not too high
-        if (containerScale >= 0.90 && zoomSpeed < 20) { // Adjust the speed threshold as needed
+        if (containerScale >= 0.90 && zoomSpeed < 20) {
+            const prevZoomLevel = zoomLevel;
             zoomLevel += zoomChange * 2.5;
-            
-            // Ensure zoomLevel stays within the range of 1 to 3
             zoomLevel = Math.max(1, Math.min(3, zoomLevel));
-			
-			
-            // Set the flag when entering zoom level 2
-            if (zoomLevel >= 1.05 && zoomLevel < 2.7) {
-                isZoomLevel2 = true;
-            } else {
-                isZoomLevel2 = false;
+
+        if (prevZoomLevel > 1 && zoomLevel <= 1 && !initialZoomImage) {
+            const touch = event.touches[0];
+            initialZoomImage = document.elementFromPoint(touch.clientX, touch.clientY).closest('.media-item');
+            isZooming = true;
+        }
+
+            isZoomLevel1 = zoomLevel === 1;
+            isZoomLevel2 = zoomLevel >= 1.05 && zoomLevel < 2.7;
+            isZoomLevel3 = zoomLevel >= 2.7;
+
+            if (isZoomLevel3) {
+                initialZoomImage = null;
+                isZooming = false;
             }
-            
-           
-            
-            // Update singleColumnView based on zoomLevel
-          //  singleColumnView = (zoomLevel == 3);
         }
     }
+
+    mediaGrid.style.setProperty('--zoom-level', zoomLevel);
     console.log("Current zoom level:", zoomLevel, "Single column:", singleColumnView, "Container scale:", containerScale, "Zoom speed:", zoomSpeed);
     updateZoomClass();
+
+    if (initialZoomImage) {
+        const index = Array.from(mediaGrid.children).indexOf(initialZoomImage);
+        
+        if (scrollAnimationId) {
+            cancelAnimationFrame(scrollAnimationId);
+        }
+        
+        scrollAnimationId = requestAnimationFrame(() => {
+            if (singleColumnView || (zoomChange < 0 && isZoomLevel2 || isZoomLevel1)) {
+                continuousScrollToImage(index);
+            } else {
+                scrollToImage(index);
+            }
+            scrollAnimationId = null;
+        });
+    }
 }
 
 function initImageClick() {
@@ -405,6 +458,18 @@ document.addEventListener('touchstart', (e) => {
 
 
 
+document.querySelector('.media-grid').addEventListener('touchmove', function(event) {
+    if (isZooming && initialZoomImage && isZoomLevel2) {
+        const index = Array.from(this.children).indexOf(initialZoomImage);
+        scrollToImage(index);
+    }
+});
+
+
+
+
+
+
 document.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
         const currentTime = new Date().getTime();
@@ -416,19 +481,38 @@ document.addEventListener('touchmove', (e) => {
         const distanceRatio = currentDistance / initialDistance;
         const timeDelta = currentTime - lastTouchTime;
         
-        // Only process zoom if enough time has passed since the last zoom action
-        if (timeDelta > 40) { // 50ms threshold, adjust as needed
+        if (timeDelta > 40) {
             if (distanceRatio > 1.2) {
-                handleZoom(0.1, timeDelta); // Zoom out
+                handleZoom(0.1, timeDelta);
             } else if (distanceRatio < 0.8) {
-                handleZoom(-0.1, timeDelta); // Zoom in
+                handleZoom(-0.1, timeDelta);
             }
             lastTouchTime = currentTime;
         }
         
-        e.preventDefault(); // Prevent default touch behavior
+        e.preventDefault();
+    }
+
+    if (isZooming && initialZoomImage) {
+        const mediaGrid = document.querySelector('.media-grid');
+        const index = Array.from(mediaGrid.children).indexOf(initialZoomImage);
+        
+        if (scrollAnimationId) {
+            cancelAnimationFrame(scrollAnimationId);
+        }
+        
+        scrollAnimationId = requestAnimationFrame(() => {
+            if (singleColumnView || (zoomLevel < 2.7 && zoomLevel >= 1.05)) {
+                continuousScrollToImage(index);
+            } else {
+                scrollToImage(index);
+            }
+            scrollAnimationId = null;
+        });
     }
 });
+
+
 document.addEventListener('touchend', () => {
     zoomOutThreshold = 0;
     
@@ -444,6 +528,8 @@ document.addEventListener('touchend', () => {
             singleColumnView = true;
         }*/
     }
+	isZooming = false;
+	initialZoomImage = null;
     updateZoomClass();
 });
 
@@ -454,6 +540,9 @@ document.addEventListener('touchend', () => {
 </script>
 </body>
 </html>
+
+
+
 
 
 
