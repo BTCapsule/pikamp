@@ -11,10 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="Photos">
 
     <title>Photos</title>
-    
-    <!-- PhotoSwipe CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/default-skin/default-skin.min.css">
+
 
     <style>
     /* Global styles */
@@ -114,45 +111,7 @@
         <div class="media-grid" id="media-container"></div>
     </div>
 
-    <!-- PhotoSwipe HTML structure -->
-    <div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="pswp__bg"></div>
-        <div class="pswp__scroll-wrap">
-            <div class="pswp__container">
-                <div class="pswp__item"></div>
-                <div class="pswp__item"></div>
-                <div class="pswp__item"></div>
-            </div>
-            <div class="pswp__ui pswp__ui--hidden">
-                <div class="pswp__top-bar">
-                    <div class="pswp__counter"></div>
-                    <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
-                    <button class="pswp__button pswp__button--share" title="Share"></button>
-                    <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
-                    <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
-                    <div class="pswp__preloader">
-                        <div class="pswp__preloader__icn">
-                            <div class="pswp__preloader__cut">
-                                <div class="pswp__preloader__donut"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
-                    <div class="pswp__share-tooltip"></div>
-                </div>
-                <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)"></button>
-                <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button>
-                <div class="pswp__caption">
-                    <div class="pswp__caption__center"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- PhotoSwipe JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe-ui-default.min.js"></script>
+  
 
     <script>
     function getCookies() {
@@ -227,6 +186,7 @@
 	
 	
 	
+	
 function exitSingleColumnView() {
     if (singleColumnView) {
         singleColumnView = false;
@@ -268,10 +228,11 @@ function exitSingleColumnView() {
                 });
 
                 loadedFiles = loadedFiles.concat(newFiles);
-
+scrollToBottom();
                 lazyLoad();
                 updateZoomClass();
                 initImageClick();
+				
             })
             .catch(error => console.error('Error loading files:', error));
     }
@@ -279,8 +240,16 @@ function exitSingleColumnView() {
 	
 	
 	
-	
-	
+function scrollToBottom() {
+    const mediaContainer = document.querySelector('.media-container');
+    // Disable smooth scrolling temporarily
+    mediaContainer.style.scrollBehavior = 'auto';
+    mediaContainer.scrollTop = mediaContainer.scrollHeight;
+    // Re-enable smooth scrolling (if it was previously enabled)
+    setTimeout(() => {
+        mediaContainer.style.scrollBehavior = '';
+    }, 0);
+}
 
     function createLazyLoadElement(file) {
         const mediaItem = document.createElement('div');
@@ -485,6 +454,8 @@ document.addEventListener('touchend', () => {
 </script>
 </body>
 </html>
+
+
 
 
 
