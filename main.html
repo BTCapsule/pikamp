@@ -79,6 +79,8 @@
     overflow: hidden;
     border-radius: 2px;
     cursor: pointer;
+	opacity: 1;
+	
 }
 
 .media-item.active {
@@ -183,6 +185,10 @@
 	
 	
 	
+	
+	
+	
+	
 	function continuousScrollToImage(index) {
     const mediaItems = document.querySelectorAll('.media-item');
     if (mediaItems[index]) {
@@ -228,6 +234,13 @@ function scrollToImage(index) {
         });
 
         toggleActiveImage(mediaItems[index]);
+
+        // Hide temporary image after scrolling
+        if (tempImage) {
+            setTimeout(() => {
+                tempImage.style.opacity = '0';
+            }, 300); // Adjust this timing to match your scroll duration
+        }
     }
 }
 
@@ -366,8 +379,12 @@ function handleZoom(zoomChange, timeDelta) {
     const containerScale = getContainerScale();
     const zoomSpeed = Math.abs(zoomChange) / timeDelta * 1000;
     
+	
+	
+	
+	
     if (singleColumnView) {
-        if (zoomChange < 0 && containerScale >= 0.99 && zoomSpeed < 4) {
+        if (zoomChange < 0 && containerScale >= 0.8 && zoomSpeed < 10) {
             zoomOutThreshold += zoomChange;
             console.log("Zoom out threshold:", zoomOutThreshold);
             
@@ -385,9 +402,9 @@ function handleZoom(zoomChange, timeDelta) {
             zoomOutThreshold = 0;
         }
     } else {
-        if (containerScale >= 0.90 && zoomSpeed < 20) {
+        if (containerScale >= 0.3 && zoomSpeed < 200) {
             const prevZoomLevel = zoomLevel;
-            zoomLevel += zoomChange * 2.5;
+            zoomLevel += zoomChange * 8.5;
             zoomLevel = Math.max(1, Math.min(3, zoomLevel));
 
         if (prevZoomLevel > 1 && zoomLevel <= 1 && !initialZoomImage) {
@@ -396,6 +413,13 @@ function handleZoom(zoomChange, timeDelta) {
             isZooming = true;
         }
 
+       if (prevZoomLevel <= 1 && zoomLevel > 1 && !initialZoomImage) {
+            const touch = event.touches[0];
+            initialZoomImage = document.elementFromPoint(touch.clientX, touch.clientY).closest('.media-item');
+            isZooming = true;
+        }
+		
+		
             isZoomLevel1 = zoomLevel === 1;
             isZoomLevel2 = zoomLevel >= 1.05 && zoomLevel < 2.7;
             isZoomLevel3 = zoomLevel >= 2.7;
@@ -481,7 +505,7 @@ document.addEventListener('touchmove', (e) => {
         const distanceRatio = currentDistance / initialDistance;
         const timeDelta = currentTime - lastTouchTime;
         
-        if (timeDelta > 40) {
+        if (timeDelta > 5) {
             if (distanceRatio > 1.2) {
                 handleZoom(0.1, timeDelta);
             } else if (distanceRatio < 0.8) {
@@ -490,7 +514,7 @@ document.addEventListener('touchmove', (e) => {
             lastTouchTime = currentTime;
         }
         
-        e.preventDefault();
+       // e.preventDefault();
     }
 
     if (isZooming && initialZoomImage) {
@@ -505,6 +529,7 @@ document.addEventListener('touchmove', (e) => {
             if (singleColumnView || (zoomLevel < 2.7 && zoomLevel >= 1.05)) {
                 continuousScrollToImage(index);
             } else {
+			
                 scrollToImage(index);
             }
             scrollAnimationId = null;
@@ -523,10 +548,7 @@ document.addEventListener('touchend', () => {
             zoomLevel = 1;
         } 
 		
-		/*else if (zoomLevel >= 2.7) {
-            zoomLevel = 3;
-            singleColumnView = true;
-        }*/
+	
     }
 	isZooming = false;
 	initialZoomImage = null;
@@ -540,8 +562,6 @@ document.addEventListener('touchend', () => {
 </script>
 </body>
 </html>
-
-
 
 
 
