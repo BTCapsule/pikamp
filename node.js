@@ -7,6 +7,8 @@ const readline = require('readline');
 const sharp = require('sharp');
 
 
+const exif = require('exif-parser');
+
 
 // Get the app instance from secureServer
 const app = secureServer.app;
@@ -34,8 +36,6 @@ app.get('/uploads/:filename', secureServer.checkSessionAuth, (req, res) => {
 
 
 
-
-// Modify your API endpoint to include thumbnail information
 app.get('/api/files', secureServer.checkSessionAuth, (req, res) => {
   fs.readdir(path.join(__dirname, 'uploads'), (err, files) => {
     if (err) {
@@ -45,8 +45,10 @@ app.get('/api/files', secureServer.checkSessionAuth, (req, res) => {
         .filter(file => file !== 'uploads.html' && !file.startsWith('thumb_'))
         .map(file => ({
           name: file,
-          thumbnail: `thumb_${file}`
-        }));
+          thumbnail: `thumb_${file}`,
+          mtime: fs.statSync(path.join(__dirname, 'uploads', file)).mtime.getTime()
+        }))
+        .sort((a, b) => b.mtime - a.mtime); // Sort by modification time, newest first
       res.json(fileInfo);
     }
   });
@@ -58,80 +60,89 @@ app.get('/api/files', secureServer.checkSessionAuth, (req, res) => {
 
 
 
-
-
-/*
-app.use('/uploads', (req, res, next) => {
-  // Always allow static files without authentication
-  if (req.path.match(/\.(css|jpg|jpeg|png|gif|mov|pdf|js)$/)) {
-    return next();
-  }
-
-  // Check if the user has secret and encrypt cookies
-  const clientSecretHash = req.cookies.secret;
-  const clientEncryptHash = req.cookies.encrypt;
-
-  if (clientSecretHash && clientEncryptHash) {
-    // User has been previously verified, apply checkSessionAuth
-    secureServer.checkSessionAuth(req, res, next);
-  } else {
-    // User hasn't been verified yet, allow access without authentication
-    next();
-  }
-});
-*/
-
-
-
-
-/*
-app.use('/uploads', (req, res, next) => {
-  if (req.path.match(/\.(jpeg|jpg|gif|png)$/i)) {
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
-  }
-  next();
-});
-*/
-
-// Configure multer for multiple file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    // We'll keep the original filename for now
+    cb(null, file.originalname)
   }
-});
-const upload = multer({ storage: storage });
+})
 
+const upload = multer({ storage: storage })
 
+app.post('/upload', secureServer.checkSessionAuth, upload.array('files'), (req, res) => {
+  const uploadedFiles = req.files;
+  const processedFiles = [];
 
+  uploadedFiles.forEach(file => {
+    const buffer = fs.readFileSync(file.path);
+    let timestamp;
 
-
-
-
-
-// Modify your upload handling route
-app.post('/upload', upload.array('file-upload'), async (req, res) => {
-  if (req.files && req.files.length > 0) {
-    const fileNames = [];
-    for (const file of req.files) {
-      fileNames.push(file.filename);
+    try {
+      const parser = exif.create(buffer);
+      const result = parser.parse();
       
-      // Generate thumbnail for image files
-      if (file.mimetype.startsWith('image/')) {
-        const thumbnailName = `thumb_${file.filename}`;
-        await sharp(file.path)
-          .withMetadata()
-          .rotate()
-          .resize(200, 200, { fit: 'cover' })
-          .toFile(path.join('uploads', thumbnailName));
+      // Try to get the original date from EXIF data
+      if (result.tags.DateTimeOriginal) {
+        // Parse the EXIF date string to a Date object
+        const exifDate = new Date(result.tags.DateTimeOriginal * 1000);
+        if (!isNaN(exifDate.getTime())) {
+          timestamp = exifDate.getTime();
+        } else {
+          throw new Error('Invalid EXIF date');
+        }
+      } else {
+        throw new Error('No EXIF date found');
       }
+    } catch (error) {
+      console.error('Error parsing EXIF data:', error);
+      // If parsing fails or no valid EXIF date, use file creation time or current time
+      timestamp = file.mtime ? new Date(file.mtime).getTime() : Date.now();
     }
-    res.json({ message: 'Files uploaded successfully', fileNames: fileNames });
-  } else {
-    res.status(400).json({ message: 'No files uploaded' });
-  }
+
+    // Rename the file to include the timestamp
+    const newFilename = `${timestamp}_${file.originalname}`;
+    fs.renameSync(file.path, `uploads/${newFilename}`);
+
+    processedFiles.push({
+      originalName: file.originalname,
+      newName: newFilename,
+      timestamp: timestamp
+    });
+  });
+
+  res.json({ message: 'Files uploaded successfully', files: processedFiles });
 });
+
+
+
+// Add this route to handle photo deletion
+app.delete('/delete/:filename', secureServer.checkSessionAuth, (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, 'uploads', filename);
+    const thumbnailPath = path.join(__dirname, 'uploads', 'thumbnails', filename);
+
+    fs.unlink(filePath, (err) => {
+        if (err) {
+            console.error('Error deleting file:', err);
+            return res.json({ success: false, message: 'Failed to delete the file' });
+        }
+
+        // Also delete the thumbnail if it exists
+        fs.unlink(thumbnailPath, (thumbErr) => {
+            if (thumbErr && thumbErr.code !== 'ENOENT') {
+                console.error('Error deleting thumbnail:', thumbErr);
+            }
+
+            res.json({ success: true, message: 'File deleted successfully' });
+        });
+    });
+});
+
+
+
 
 
 secureServer.start();
