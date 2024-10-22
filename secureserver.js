@@ -4,44 +4,22 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const cookieParser = require('cookie-parser');
 const readline = require('readline');
 
-const app = express();
 
-// Middleware
+const WebSocket = require('ws');
+const app = express();
+app.use(express.json());
+
 app.use(cookieParser());
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
-
-
-
-
-
-
-
-/*
-// File Upload Setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
-});
-
-const upload = multer({ storage: storage });
-*/
-
-
-
 
 
 
@@ -102,13 +80,7 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-function promptForAccess(ip) {
-  return new Promise((resolve) => {
-    rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
-      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
-    });
-  });
-}
+
 
 function generateHash() {
   return crypto.createHash('sha256').update(crypto.randomBytes(64)).digest('hex');
@@ -143,10 +115,7 @@ function createNewSecretFile(secretHash, encryptHash, pin = '') {
   const content = `${secretHash}\n${pin}`;
   const encryptedContent = encryptData(content, encryptHash);
   fs.writeFileSync(fileName, encryptedContent);
-  console.log(`New secret file created: ${fileName}`);
-  console.log(`Secret Hash: ${secretHash}`);
-  console.log(`Encrypt Hash: ${encryptHash}`);
-  console.log(`PIN: ${pin}`);
+
 }
 
 function checkHash(secretHash, encryptHash) {
@@ -181,7 +150,7 @@ function updateSecretFile(oldSecretHash, oldEncryptHash, newSecretHash, newEncry
         return true;
       }
     } catch (error) {
-      console.error(`Error processing file ${file}:`, error);
+     // Silently continue to the next file
     }
   }
   console.error('No matching secret file found to update');
@@ -198,7 +167,7 @@ async function checkHashAndPin(secretHash, encryptHash) {
       const decryptedContent = decryptData(encryptedContent, encryptHash);
       const [storedHash, pin] = decryptedContent.split('\n');
       if (storedHash === secretHash) {
-        return pin ? 'pin' : 'main';
+        return pin ? 'pin' : '/';
       }
     } catch (error) {
       // Silently continue to the next file
@@ -212,9 +181,9 @@ async function checkHashAndPin(secretHash, encryptHash) {
 
 async function checkSessionAuth(req, res, next) {
 	
-		  	const previousUrl = req.get('Referer');
+	  const previousUrl = req.get('Referer');
       res.cookie('redirect_after_pin', previousUrl, { secure: true, sameSite: 'lax', maxAge: 30000000 });
-	  console.log(previousUrl);
+	  
 	  
   if (req.cookies.session_auth === 'true') {
     return next();
@@ -232,29 +201,137 @@ async function checkSessionAuth(req, res, next) {
 
 	 // 5 minutes expiry
       return res.redirect('/pin');
-    } else if (authResult === 'main') {
+    } else if (authResult === '/') {
       // Set the session_auth cookie and proceed
-      res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
+      res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
       return next();
     }
   }
 
   // If no valid cookies are present, redirect to the home page
-  res.redirect('/');
+  res.redirect('/main');
 }
 
 
 
 
 
+let wss;
+
+let clients = new Set();
 
 
-/*
+ function setupWebSocket(server) {
+  wss = new WebSocket.Server({ server });
 
-app.get('/auth-success', (req, res) => {
-  res.redirect('/main');
+  wss.on('connection', (ws) => {
+    clients.add(ws);
+    
+    ws.on('close', () => {
+      clients.delete(ws);
+    });
+
+    ws.on('message', (message) => {
+      const data = JSON.parse(message);
+      if (data.type === 'deviceResponse') {
+        handleDeviceResponse(data);
+      }
+    });
+  });
+ }
+
+
+
+
+function broadcastNewDevicePrompt(ip) {
+  const message = JSON.stringify({ type: 'newDevicePrompt', ip });
+  clients.forEach(client => client.send(message));
+}
+
+
+
+
+
+  let pendingPrompts = new Map();
+
+  function handleDeviceResponse(data) {
+  const { ip, allow } = data;
+  const resolver = pendingPrompts.get(ip);
+  if (resolver) {
+    resolver(allow);
+    pendingPrompts.delete(ip);
+  }
+ }
+
+
+
+function promptForAccess(ip) {
+  return new Promise((resolve) => {
+    broadcastNewDevicePrompt(ip);
+    
+    pendingPrompts.set(ip, resolve);
+    
+    rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
+      const serverAllow = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+      
+      const timeout = setTimeout(() => {
+        pendingPrompts.delete(ip);
+        resolve(serverAllow);
+      }, 30000);
+
+      const clientResponseHandler = (allow) => {
+        clearTimeout(timeout);
+        pendingPrompts.delete(ip);
+        resolve(allow || serverAllow);
+      };
+
+      pendingPrompts.set(ip, clientResponseHandler);
+    });
+  });
+}
+
+
+
+app.post('/remove-device', checkSessionAuth, (req, res) => {
+  const files = getSecretFiles();
+  const newFiles = [];
+
+  files.forEach(file => {
+    const match = file.match(/user(\d+)\.secret/);
+    if (match) {
+      const userNumber = parseInt(match[1]);
+      newFiles.push({ fileName: file, userNumber });
+    }
+  });
+
+  if (newFiles.length === 0) {
+    return res.status(404).json({ success: false, message: 'No new users to remove' });
+  }
+
+  // Sort files by user number to get the latest one
+  newFiles.sort((a, b) => b.userNumber - a.userNumber);
+  const latestFile = newFiles[0];
+
+  fs.unlink(latestFile.fileName, (err) => {
+    if (err) {
+      console.error(`Error removing file: ${err}`);
+      res.status(500).json({ success: false, message: 'Failed to remove user' });
+    } else {
+      res.json({ 
+        success: true, 
+        message: 'User removed successfully', 
+        removedUser: latestFile.userNumber,
+        remainingUsers: newFiles.length - 1
+      });
+    }
+  });
 });
-*/
+
+
+
+
+
+
 
 
 
@@ -276,8 +353,8 @@ app.post('/create-pin', express.json(), (req, res) => {
   res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
   res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
 
-  console.log('PIN created, redirecting to /main');
-  res.sendStatus(200); // Change this line
+
+  res.sendStatus(200);
 });
 
 
@@ -302,15 +379,15 @@ app.post('/verify-pin', express.json(), (req, res) => {
     res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
     
     // Get the stored redirect URL
-    const redirectUrl = req.cookies.redirect_after_pin || '/main';
-   console.log('Redirecting to: ' + req.cookies.redirect_after_pin);
+    const redirectUrl = '/';
+   
     // Clear the redirect cookie
     res.clearCookie('redirect_after_pin');
     
     return res.json({ success: true, redirectUrl });
       }
     } catch (error) {
-     // console.error('Error verifying PIN:', error);
+     // Silently continue to the next file
     }
   }
 
@@ -323,7 +400,7 @@ app.post('/verify-pin', express.json(), (req, res) => {
 
 
 
-app.get('/main', checkSessionAuth, (req, res) => {
+app.get('/', checkSessionAuth, (req, res) => {
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
   const pinVerified = req.cookies.pin_verified;
@@ -340,57 +417,18 @@ app.get('/main', checkSessionAuth, (req, res) => {
             return res.redirect('/pin');
           } else {
             // User is fully authenticated, set a session cookie
-            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
-            return res.sendFile(path.join(__dirname, 'main.html'));
+            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
+            return res.sendFile(path.join(__dirname, 'index.html'));
           }
         }
       } catch (error) {
-        console.error('Error processing file:', error);
+       // Silently continue to the next file
       }
     }
   }
 
-  res.redirect('/');
+  res.redirect('/main');
 });
-
-
-/*
-app.get('/uploads', checkSessionAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'uploads', 'uploads.html'));
-});
-
-
-app.get('/uploads/:filename', checkSessionAuth, (req, res) => {
-  const filename = req.params.filename;
-  res.sendFile(path.join(__dirname, 'uploads', filename));
-});
-
-app.use('/uploads', (req, res, next) => {
-  if (req.path.match(/\.(jpeg|jpg|gif|png)$/i)) {
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
-  }
-  next();
-});
-
-
-app.get('/api/files', checkSessionAuth, (req, res) => {
-  fs.readdir(path.join(__dirname, 'uploads'), (err, files) => {
-    if (err) {
-      res.status(500).json({ error: 'Unable to read directory' });
-    } else {
-      res.json(files.filter(file => file !== 'uploads.html'));
-    }
-  });
-});
-
-*/
-
-
-
-
-
-
-// Middleware for access control
 
 
 
@@ -404,15 +442,15 @@ app.use(async (req, res, next) => {
 
   if (clientSecretHash && clientEncryptHash) {
     const authResult = await checkHashAndPin(clientSecretHash, clientEncryptHash);
-    if (authResult === 'main' || (authResult === 'pin' && pinVerified)) {
+    if (authResult === '/' || (authResult === 'pin' && pinVerified)) {
       return next();
     } else if (authResult === 'pin' && !pinVerified) {
       return res.sendFile(path.join(__dirname, 'pin.html'));
     }
   }
 
-  if (req.path !== '/') {
-    return res.redirect('/');
+  if (req.path !== '/main') {
+    return res.redirect('/main');
   }
 
   console.log(`User visited from IP: ${clientIP}`);
@@ -428,44 +466,17 @@ app.use(async (req, res, next) => {
 
 
 
-
-
-
 // Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-
-
-
-
-/*
-
 app.get('/main', (req, res) => {
-  const clientSecretHash = req.cookies.secret;
-  const clientEncryptHash = req.cookies.encrypt;
-
-  if (clientSecretHash && clientEncryptHash) {
-    const files = getSecretFiles();
-    for (const file of files) {
-      try {
-        const encryptedContent = fs.readFileSync(file, 'utf8');
-        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
-        const [storedHash, pin] = decryptedContent.split('\n');
-        if (storedHash === clientSecretHash) {
-          return res.sendFile(path.join(__dirname, 'main.html'));
-        }
-      } catch (error) {
-        console.error('Error processing file:', error);
-      }
-    }
-  }
-
-  res.redirect('/');
+  res.sendFile(path.join(__dirname, 'main.html'));
 });
 
-*/
+
+
+
+
+
+
 
 
 
@@ -496,6 +507,8 @@ function start() {
       const port = 443;
       const server = https.createServer(httpsOptions, app);
       
+	  setupWebSocket(server);
+	  
       server.listen(port, () => {
         console.log(`HTTPS Server running at https://${ip}:${port}/`);
         console.log(`Access this URL on your phone's browser`);
@@ -506,7 +519,7 @@ function start() {
     });
 }
 
-// At the end of secureserver.js
+
 module.exports = {
   start,
   app,
