@@ -1,9 +1,5 @@
 
-	
-	
-	console.log("dude");
-	
-	
+
 // Common function to retrieve all cookies
 function getCookies() {
     const cookies = {};
@@ -100,7 +96,29 @@ function showNewUserMessage(ip) {
   document.body.appendChild(message);
 }
 
-
+function promptRemoveUser(ip, messageElement) {
+  const remove = confirm(`Remove user [${ip}]?`);
+  if (remove) {
+    fetch('/remove-device', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ip: ip }),
+      credentials: 'include' // to include cookies
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        messageElement.remove();
+        console.log(`Removed user ${ip}`);
+      } else {
+        console.error(data.message);
+      }
+    })
+    .catch(error => console.error('Error:', error));
+  }
+}
 
 
 
@@ -153,5 +171,3 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(checkSessionAuth, 3600000);
     }
 }, false);
-
-
