@@ -180,38 +180,48 @@ async function checkHashAndPin(secretHash, encryptHash) {
 
 
 async function checkSessionAuth(req, res, next) {
-	
-	  const previousUrl = req.get('Referer');
-      res.cookie('redirect_after_pin', previousUrl, { secure: true, sameSite: 'lax', maxAge: 30000000 });
-	  
-	  
-  if (req.cookies.session_auth === 'true') {
-    return next();
-  }
-
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
 
   if (clientSecretHash && clientEncryptHash) {
+    const files = getSecretFiles();
+    let fileToDelete = null;
 
-    const authResult = await checkHashAndPin(clientSecretHash, clientEncryptHash);
-    if (authResult === 'pin') {
-		
-      // Store the current URL in a cookie before redirecting to PIN page
-
-	 // 5 minutes expiry
-      return res.redirect('/pin');
-    } else if (authResult === '/') {
-      // Set the session_auth cookie and proceed
-      res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
-      return next();
+    for (const file of files) {
+      try {
+        const encryptedContent = fs.readFileSync(file, 'utf8');
+        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+        const [storedHash, pin] = decryptedContent.split('\n');
+        
+        if (storedHash === clientSecretHash) {
+          if (pin && !req.cookies.pin_verified) {
+            return res.redirect('/pin');
+          } else {
+            // User is authenticated, set session cookie
+            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
+            return next();
+          }
+        }
+      } catch (error) {
+        // If we can't decrypt the file with the client's encrypt hash,
+        // it means this file doesn't belong to this client.
+        // Continue to the next file.
+      }
     }
+
+    // If we've reached this point, it means the client's cookies don't match any secret file
+    // Clear all cookies
+    for (const cookieName in req.cookies) {
+      res.clearCookie(cookieName);
+    }
+
+    // Redirect to main page
+    return res.redirect('/main');
   }
 
   // If no valid cookies are present, redirect to the home page
   res.redirect('/main');
 }
-
 
 
 
@@ -254,43 +264,62 @@ function broadcastNewDevicePrompt(ip) {
 
   let pendingPrompts = new Map();
 
-  function handleDeviceResponse(data) {
+function handleDeviceResponse(data) {
   const { ip, allow } = data;
   const resolver = pendingPrompts.get(ip);
   if (resolver) {
     resolver(allow);
     pendingPrompts.delete(ip);
+    
+    // Broadcast the response to all clients
+    const responseMessage = JSON.stringify({ type: 'deviceResponseUpdate', ip, allow });
+    clients.forEach(client => client.send(responseMessage));
+    
+    console.log(`New user with IP ${ip} was ${allow ? 'accepted' : 'denied'} by the client`);
   }
- }
+}
 
 
 
 function promptForAccess(ip) {
   return new Promise((resolve) => {
-    broadcastNewDevicePrompt(ip);
+    const existingFiles = getSecretFiles();
+    const isFirstUser = existingFiles.length === 0;
+
+    if (!isFirstUser) {
+      broadcastNewDevicePrompt(ip);
+    }
     
-    pendingPrompts.set(ip, resolve);
-    
+    let isResolved = false;
+
+    const resolveOnce = (allow) => {
+      if (!isResolved) {
+        isResolved = true;
+        pendingPrompts.delete(ip);
+        
+        // Broadcast the response to all clients
+        const responseMessage = JSON.stringify({ type: 'deviceResponseUpdate', ip, allow });
+        clients.forEach(client => client.send(responseMessage));
+        
+        console.log(`New user with IP ${ip} was ${allow ? 'accepted' : 'denied'} by the ${isFirstUser ? 'server' : 'server or client'}`);
+        resolve(allow);
+      }
+    };
+
+    if (!isFirstUser) {
+      pendingPrompts.set(ip, (clientAllow) => {
+        if (clientAllow) {
+          resolveOnce(true);
+        }
+      });
+    }
+
     rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
       const serverAllow = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
-      
-      const timeout = setTimeout(() => {
-        pendingPrompts.delete(ip);
-        resolve(serverAllow);
-      }, 30000);
-
-      const clientResponseHandler = (allow) => {
-        clearTimeout(timeout);
-        pendingPrompts.delete(ip);
-        resolve(allow || serverAllow);
-      };
-
-      pendingPrompts.set(ip, clientResponseHandler);
+      resolveOnce(serverAllow);
     });
   });
 }
-
-
 
 app.post('/remove-device', checkSessionAuth, (req, res) => {
   const files = getSecretFiles();
@@ -317,22 +346,40 @@ app.post('/remove-device', checkSessionAuth, (req, res) => {
       console.error(`Error removing file: ${err}`);
       res.status(500).json({ success: false, message: 'Failed to remove user' });
     } else {
+      // Check if the removed file matches the current user's cookies
+      const clientSecretHash = req.cookies.secret;
+      const clientEncryptHash = req.cookies.encrypt;
+      
+      let shouldLogout = false;
+
+      try {
+        const encryptedContent = fs.readFileSync(latestFile.fileName, 'utf8');
+        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+        const [storedHash, _] = decryptedContent.split('\n');
+        
+        if (storedHash === clientSecretHash) {
+          shouldLogout = true;
+        }
+      } catch (error) {
+        // If there's an error reading the file, it's likely already deleted
+        // so we don't need to do anything here
+      }
+
       res.json({ 
         success: true, 
         message: 'User removed successfully', 
         removedUser: latestFile.userNumber,
-        remainingUsers: newFiles.length - 1
+        remainingUsers: newFiles.length - 1,
+        action: shouldLogout ? 'logout' : 'none'
       });
     }
   });
 });
 
 
-
-
-
-
-
+app.get('/cookies.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'cookies.js'));
+});
 
 
 app.get('/createpin', (req, res) => {
@@ -531,6 +578,10 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
+
+
+
+
 
 
 
