@@ -178,14 +178,19 @@ async function checkHashAndPin(secretHash, encryptHash) {
 
 
 
-
 async function checkSessionAuth(req, res, next) {
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
 
+  const files = getSecretFiles();
+
+  // If there are no secret files, allow access to main.html
+  if (files.length === 0) {
+    return next();
+  }
+
   if (clientSecretHash && clientEncryptHash) {
-    const files = getSecretFiles();
-    let fileToDelete = null;
+    let fileFound = false;
 
     for (const file of files) {
       try {
@@ -194,6 +199,7 @@ async function checkSessionAuth(req, res, next) {
         const [storedHash, pin] = decryptedContent.split('\n');
         
         if (storedHash === clientSecretHash) {
+          fileFound = true;
           if (pin && !req.cookies.pin_verified) {
             return res.redirect('/pin');
           } else {
@@ -209,20 +215,21 @@ async function checkSessionAuth(req, res, next) {
       }
     }
 
-    // If we've reached this point, it means the client's cookies don't match any secret file
-    // Clear all cookies
-    for (const cookieName in req.cookies) {
-      res.clearCookie(cookieName);
-    }
+    if (!fileFound) {
+      // If we've reached this point, it means the client's cookies don't match any secret file
+      // Clear all cookies
+      for (const cookieName in req.cookies) {
+        res.clearCookie(cookieName);
+      }
 
-    // Redirect to main page
-    return res.redirect('/main');
+      // Redirect to access denied page
+      return res.redirect('/access-denied');
+    }
   }
 
-  // If no valid cookies are present, redirect to the home page
+  // If no valid cookies are present, redirect to the main page
   res.redirect('/main');
 }
-
 
 
 
@@ -382,6 +389,13 @@ app.get('/cookies.js', (req, res) => {
 });
 
 
+app.get('/access-denied', (req, res) => {
+  res.status(403).sendFile(path.join(__dirname, 'access-denied.html'));
+});
+
+
+
+
 app.get('/createpin', (req, res) => {
   res.sendFile(path.join(__dirname, 'createpin.html'));
 });
@@ -403,7 +417,6 @@ app.post('/create-pin', express.json(), (req, res) => {
 
   res.sendStatus(200);
 });
-
 
 
 
@@ -578,10 +591,6 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
-
-
-
-
 
 
 
