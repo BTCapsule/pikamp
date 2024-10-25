@@ -223,7 +223,7 @@ async function checkSessionAuth(req, res, next) {
       }
 
       // Redirect to access denied page
-      return res.redirect('/access-denied');
+      return res.status(403).send('Access Denied');
     }
   }
 
@@ -387,12 +387,6 @@ app.post('/remove-device', checkSessionAuth, (req, res) => {
 app.get('/cookies.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'cookies.js'));
 });
-
-
-app.get('/access-denied', (req, res) => {
-  res.status(403).sendFile(path.join(__dirname, 'access-denied.html'));
-});
-
 
 
 
