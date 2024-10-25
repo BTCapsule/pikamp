@@ -22,7 +22,8 @@ app.use(cors({
 }));
 
 
-
+// Add at the top of secureserver.js
+let previousSecretFileCount = 0;
 
 // SSL Certificate Generation
 function generateSelfSignedCertificate() {
@@ -177,8 +178,25 @@ async function checkHashAndPin(secretHash, encryptHash) {
 }
 
 
-
 async function checkSessionAuth(req, res, next) {
+  const currentFileCount = getSecretFiles().length;
+  
+  // Check if number of files has changed
+  if (currentFileCount > previousSecretFileCount) {
+    // Broadcast to all clients that a new user was added
+    const message = JSON.stringify({
+      type: 'newUserAdded',
+      totalUsers: currentFileCount,
+      timestamp: Date.now()
+    });
+    clients.forEach(client => client.send(message));
+  }
+  
+  previousSecretFileCount = currentFileCount;
+
+
+
+
   const clientSecretHash = req.cookies.secret;
   const clientEncryptHash = req.cookies.encrypt;
 
@@ -238,7 +256,7 @@ let wss;
 let clients = new Set();
 
 
- function setupWebSocket(server) {
+function setupWebSocket(server) {
   wss = new WebSocket.Server({ server });
 
   wss.on('connection', (ws) => {
@@ -250,12 +268,17 @@ let clients = new Set();
 
     ws.on('message', (message) => {
       const data = JSON.parse(message);
-      if (data.type === 'deviceResponse') {
-        handleDeviceResponse(data);
+      switch(data.type) {
+        case 'deviceResponse':
+          handleDeviceResponse(data);
+          break;
+        case 'removeUser':
+          handleRemoveUser(data);
+          break;
       }
     });
   });
- }
+}
 
 
 
@@ -279,12 +302,20 @@ function handleDeviceResponse(data) {
     pendingPrompts.delete(ip);
     
     // Broadcast the response to all clients
-    const responseMessage = JSON.stringify({ type: 'deviceResponseUpdate', ip, allow });
+    const responseMessage = JSON.stringify({ 
+      type: 'deviceResponseUpdate', 
+      ip, 
+      allow 
+    });
     clients.forEach(client => client.send(responseMessage));
     
     console.log(`New user with IP ${ip} was ${allow ? 'accepted' : 'denied'} by the client`);
   }
 }
+
+
+
+
 
 
 
@@ -294,6 +325,7 @@ function promptForAccess(ip) {
     const isFirstUser = existingFiles.length === 0;
 
     if (!isFirstUser) {
+      // Always broadcast to all clients
       broadcastNewDevicePrompt(ip);
     }
     
@@ -304,29 +336,34 @@ function promptForAccess(ip) {
         isResolved = true;
         pendingPrompts.delete(ip);
         
-        // Broadcast the response to all clients
-        const responseMessage = JSON.stringify({ type: 'deviceResponseUpdate', ip, allow });
+        // Always broadcast response to all clients
+        const responseMessage = JSON.stringify({ 
+          type: 'deviceResponseUpdate', 
+          ip, 
+          allow,
+          timestamp: Date.now() 
+        });
         clients.forEach(client => client.send(responseMessage));
         
-        console.log(`New user with IP ${ip} was ${allow ? 'accepted' : 'denied'} by the ${isFirstUser ? 'server' : 'server or client'}`);
+        console.log(`New user with IP ${ip} was ${allow ? 'accepted' : 'denied'}`);
         resolve(allow);
       }
     };
 
-    if (!isFirstUser) {
-      pendingPrompts.set(ip, (clientAllow) => {
-        if (clientAllow) {
-          resolveOnce(true);
-        }
-      });
-    }
+    pendingPrompts.set(ip, resolveOnce);
 
+    // Server prompt
     rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
       const serverAllow = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
       resolveOnce(serverAllow);
     });
   });
 }
+
+
+
+
+
 
 app.post('/remove-device', checkSessionAuth, (req, res) => {
   const files = getSecretFiles();
@@ -399,20 +436,23 @@ app.get('/pin', (req, res) => {
 });
 
 app.post('/create-pin', express.json(), (req, res) => {
-  const { pin } = req.body;
-  const newSecretHash = generateHash();
-  const newEncryptHash = generateHash();
-  
-  createNewSecretFile(newSecretHash, newEncryptHash, pin);
+    const { pin } = req.body;
+    const newSecretHash = generateHash();
+    const newEncryptHash = generateHash();
+    
+    createNewSecretFile(newSecretHash, newEncryptHash, pin);
 
-  res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
-  res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    // Broadcast new user added (not just accepted)
+    const message = JSON.stringify({
+        type: 'newUserCreated',
+        ip: req.ip
+    });
+    clients.forEach(client => client.send(message));
 
-
-  res.sendStatus(200);
+    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    res.sendStatus(200);
 });
-
-
 
 
 
@@ -585,6 +625,8 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
+
+
 
 
 
