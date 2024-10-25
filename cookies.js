@@ -133,32 +133,7 @@ function dismissMessage(element) {
 }
 
 
-function promptRemoveUser(ip, messageElement) {
-    const userNumber = ip.split('.').join('');
-    const remove = confirm(`Remove user [${ip}]?`);
-    if (remove) {
-        fetch('/remove-device', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include' // to include cookies
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log(`Removed user${data.removedUser}`);
-                if (data.remainingUsers > 0) {
-                    console.log(`There are still ${data.remainingUsers} new user(s) that haven't been dismissed or deleted.`);
-                    // Implement logic to notify the user about remaining new users
-                }
-            } else {
-                console.error(data.message);
-            }
-        })
-        .catch(error => console.error('Error:', error));
-    }
-}
+
 
 
 // Call this function on all pages
