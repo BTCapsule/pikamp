@@ -143,21 +143,21 @@ function updateSecretFile(oldSecretHash, oldEncryptHash, newSecretHash, newEncry
     try {
       const encryptedContent = fs.readFileSync(file, 'utf8');
       const decryptedContent = decryptData(encryptedContent, oldEncryptHash);
-      if (decryptedContent === oldSecretHash) {
-        // This is the file we need to update
-        const newEncryptedContent = encryptData(newSecretHash, newEncryptHash);
+      const [storedHash, storedPin] = decryptedContent.split('\n');
+      
+      if (storedHash === oldSecretHash) {
+        // Create new content with new hash but keep the same PIN
+        const newContent = `${newSecretHash}\n${storedPin}`;
+        const newEncryptedContent = encryptData(newContent, newEncryptHash);
         fs.writeFileSync(file, newEncryptedContent);
-        console.log(`Updated file: ${file}`);
         return true;
       }
     } catch (error) {
-     // Silently continue to the next file
+      // Silently continue to the next file
     }
   }
-  console.error('No matching secret file found to update');
   return false;
 }
-
 
 
 async function checkHashAndPin(secretHash, encryptHash) {
@@ -491,20 +491,42 @@ app.post('/remove-user', checkSessionAuth, (req, res) => {
     const { userNumber } = req.body;
     const files = getSecretFiles();
     
-    // Remove the specified user file
-    fs.unlinkSync(`user${userNumber}.secret`);
-    
-    // Rename higher numbered files
-    files.forEach(file => {
-        const num = parseInt(file.match(/\d+/)[0]);
-        if (num > userNumber) {
-            fs.renameSync(file, `user${num-1}.secret`);
-        }
-    });
-    
-    res.json({ success: true });
+    try {
+        // Remove the specified user file
+        fs.unlinkSync(`user${userNumber}.secret`);
+        
+        // Get list of files again after deletion
+        const remainingFiles = getSecretFiles();
+        
+        // Sort files by number to ensure correct renaming
+        const fileNumbers = remainingFiles
+            .map(f => parseInt(f.match(/\d+/)[0]))
+            .sort((a, b) => a - b);
+            
+        // Rename files sequentially
+        fileNumbers.forEach((num, index) => {
+            if (num > userNumber) {
+                const oldName = `user${num}.secret`;
+                const newName = `user${num-1}.secret`;
+                fs.renameSync(oldName, newName);
+            }
+        });
+        
+        // Return new count after reorganization
+        const newCount = getSecretFiles().length;
+        
+        res.json({ 
+            success: true,
+            newCount: newCount
+        });
+    } catch (error) {
+        console.error('Error during user removal:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to remove user'
+        });
+    }
 });
-
 
 app.get('/', checkSessionAuth, (req, res) => {
   const clientSecretHash = req.cookies.secret;
@@ -637,9 +659,6 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
-
-
-
 
 
 
