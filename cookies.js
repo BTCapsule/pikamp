@@ -1,4 +1,4 @@
-let previousSecretFileCount = 0;
+
 
 // Common function to retrieve all cookies
 function getCookies() {
@@ -10,21 +10,76 @@ function getCookies() {
     return cookies;
 }
 
-// Function for main.html
+// In cookies.js
+let previousSecretFileCount = 0;
+
 function checkSessionAuth() {
+	
+	    if (window.location.pathname.includes('pin')) {
+        return;
+    }
     const cookies = getCookies();
     const sessionAuth = cookies['session_auth'];
-    
+    const userNumber = parseInt(cookies['user_number'] || '0');
+        // Keep existing session auth check
+    if (!sessionAuth || sessionAuth !== 'true') {
+       window.location.replace('/pin');
+		return;
+    }
+	
+	
+	
     // Get current secret files count from cookie
     const currentFileCount = parseInt(cookies['secret_count'] || '0');
     
-    if (currentFileCount > previousSecretFileCount) {
-        showNewUserMessage('New user added');
+    // Check for new users (one at a time)
+    if (currentFileCount > userNumber) {
+        const nextUserNumber = userNumber + 1;
+        showNewUserMessage(`user${nextUserNumber}`);
     }
-    previousSecretFileCount = currentFileCount;
 
-    if (sessionAuth !== 'true') {
-        window.location.href = '/pin';
+
+}
+
+function showNewUserMessage(userNumber) {
+    const message = document.createElement('div');
+    message.className = 'new-user-message';
+    message.setAttribute('data-user-number', userNumber.replace('user', ''));
+    message.innerHTML = `
+        <span>New user ${userNumber} added</span>
+        <button onclick="dismissMessage(this.parentElement)">Dismiss</button>
+    `;
+    message.addEventListener('click', (event) => {
+        if (event.target.tagName !== 'BUTTON') {
+            promptRemoveUser(userNumber, message);
+        }
+    });
+    document.body.appendChild(message);
+}
+
+function dismissMessage(element) {
+    const userNum = element.getAttribute('data-user-number');
+    document.cookie = `user_number=${userNum}`;
+    element.remove();
+}
+
+function promptRemoveUser(userNumber, messageElement) {
+    const remove = confirm(`Remove ${userNumber}?`);
+    if (remove) {
+        fetch('/remove-device', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userNumber: parseInt(userNumber.replace('user', '')) }),
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                messageElement.remove();
+            }
+        });
     }
 }
 
@@ -108,49 +163,7 @@ function handleDeviceResponseUpdate(ip, allow, isNewUser) {
     }
 }
 
-function showNewUserMessage(ip) {
-    const message = document.createElement('div');
-    message.className = 'new-user-message';
-    message.setAttribute('data-ip', ip);
-    message.innerHTML = `
-        <span>New user [${ip}] added</span>
-        <button onclick="dismissMessage(this.parentElement)">Dismiss</button>
-    `;
-    message.addEventListener('click', (event) => {
-        if (event.target.tagName !== 'BUTTON') {
-            promptRemoveUser(ip, message);
-        }
-    });
-    document.body.appendChild(message);
-}
 
-function promptRemoveUser(ip, messageElement) {
-    const remove = confirm(`Remove user [${ip}]?`);
-    if (remove) {
-        fetch('/remove-device', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ ip: ip }),
-            credentials: 'include'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                messageElement.remove();
-                console.log(`Removed user ${ip}`);
-            } else {
-                console.error(data.message);
-            }
-        })
-        .catch(error => console.error('Error:', error));
-    }
-}
-
-function dismissMessage(element) {
-    element.remove();
-}
 
 document.addEventListener('DOMContentLoaded', function() {
     connectWebSocket();
