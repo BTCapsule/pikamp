@@ -457,21 +457,27 @@ app.post('/verify-pin', express.json(), (req, res) => {
       const encryptedContent = fs.readFileSync(file, 'utf8');
       const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
       const [storedHash, storedPin] = decryptedContent.split('\n');
+      
       if (storedHash === clientSecretHash && storedPin === pin) {
-        // PIN is correct, set a cookie to indicate PIN verification
- res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 16001 });
-    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 16000 });
-    
-    // Get the stored redirect URL
-    const redirectUrl = '/';
-   
-    // Clear the redirect cookie
-    res.clearCookie('redirect_after_pin');
-    
-    return res.json({ success: true, redirectUrl });
+        // Generate new hashes for rotation
+        const newSecretHash = generateHash();
+        const newEncryptHash = generateHash();
+        
+        // Update the secret file with new hashes
+        if (updateSecretFile(clientSecretHash, clientEncryptHash, newSecretHash, newEncryptHash)) {
+          // Set new cookies with rotated hashes
+          res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+          res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+          
+          // Set session cookies
+          res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 16001 });
+          res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 16000 });
+          
+          return res.json({ success: true, redirectUrl: '/' });
+        }
       }
     } catch (error) {
-     // Silently continue to the next file
+      // Silently continue to the next file
     }
   }
 
