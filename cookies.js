@@ -145,7 +145,7 @@ function handleDeviceResponse(ip, allow) {
     ws.send(JSON.stringify({ type: 'deviceResponse', ip, allow }));
 }
 
-function handleDeviceResponseUpdate(ip, allow, isNewUser) {
+function handleDeviceResponseUpdate(ip, allow) {
     const existingPrompt = document.querySelector(`.new-user-message[data-ip="${ip}"]`);
     if (existingPrompt) {
         existingPrompt.remove();
