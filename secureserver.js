@@ -116,7 +116,7 @@ function createNewSecretFile(secretHash, encryptHash, pin = '') {
   const content = `${secretHash}\n${pin}`;
   const encryptedContent = encryptData(content, encryptHash);
   fs.writeFileSync(fileName, encryptedContent);
-
+  return newUserNumber; // Return the user number
 }
 
 function checkHash(secretHash, encryptHash) {
@@ -178,77 +178,62 @@ async function checkHashAndPin(secretHash, encryptHash) {
 }
 
 
+
 async function checkSessionAuth(req, res, next) {
-  const currentFileCount = getSecretFiles().length;
-  
-  // Check if number of files has changed
-  if (currentFileCount > previousSecretFileCount) {
-    // Broadcast to all clients that a new user was added
-    const message = JSON.stringify({
-      type: 'newUserAdded',
-      totalUsers: currentFileCount,
-      timestamp: Date.now()
+    // Keep existing authentication logic
+    const clientSecretHash = req.cookies.secret;
+    const clientEncryptHash = req.cookies.encrypt;
+    
+    const files = getSecretFiles();
+    const currentFileCount = files.length;
+    
+    // Set the secret count cookie
+    res.cookie('secret_count', currentFileCount.toString(), { 
+        secure: true, 
+        sameSite: 'lax', 
+        maxAge: 3600000 
     });
-    clients.forEach(client => client.send(message));
-  }
-  
-  previousSecretFileCount = currentFileCount;
 
+    // If there are no secret files, allow access
+    if (files.length === 0) {
+        return next();
+    }
 
-
-
-  const clientSecretHash = req.cookies.secret;
-  const clientEncryptHash = req.cookies.encrypt;
-
-  const files = getSecretFiles();
-
-  // If there are no secret files, allow access to main.html
-  if (files.length === 0) {
-    return next();
-  }
-
-  if (clientSecretHash && clientEncryptHash) {
-    let fileFound = false;
-
-    for (const file of files) {
-      try {
-        const encryptedContent = fs.readFileSync(file, 'utf8');
-        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
-        const [storedHash, pin] = decryptedContent.split('\n');
-        
-        if (storedHash === clientSecretHash) {
-          fileFound = true;
-          if (pin && !req.cookies.pin_verified) {
-            return res.redirect('/pin');
-          } else {
-            // User is authenticated, set session cookie
-            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
-            return next();
-          }
+    // Keep existing authentication checks
+    if (clientSecretHash && clientEncryptHash) {
+        let fileFound = false;
+        for (const file of files) {
+            try {
+                const encryptedContent = fs.readFileSync(file, 'utf8');
+                const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+                const [storedHash, pin] = decryptedContent.split('\n');
+                
+                if (storedHash === clientSecretHash) {
+                    fileFound = true;
+                    if (pin && !req.cookies.pin_verified) {
+                        return res.redirect('/pin');
+                    } else {
+                      //  res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
+                        return next();
+                    }
+                }
+            } catch (error) {
+                // Continue to next file if decryption fails
+            }
         }
-      } catch (error) {
-        // If we can't decrypt the file with the client's encrypt hash,
-        // it means this file doesn't belong to this client.
-        // Continue to the next file.
-      }
+
+        if (!fileFound) {
+            // Clear cookies if no matching file found
+            for (const cookieName in req.cookies) {
+                res.clearCookie(cookieName);
+            }
+            return res.status(403).send('Access Denied');
+        }
     }
 
-    if (!fileFound) {
-      // If we've reached this point, it means the client's cookies don't match any secret file
-      // Clear all cookies
-      for (const cookieName in req.cookies) {
-        res.clearCookie(cookieName);
-      }
-
-      // Redirect to access denied page
-      return res.status(403).send('Access Denied');
-    }
-  }
-
-  // If no valid cookies are present, redirect to the main page
-  res.redirect('/main');
+    // If no valid cookies present, redirect to main
+    res.redirect('/main');
 }
-
 
 
 let wss;
@@ -440,17 +425,22 @@ app.post('/create-pin', express.json(), (req, res) => {
     const newSecretHash = generateHash();
     const newEncryptHash = generateHash();
     
-    createNewSecretFile(newSecretHash, newEncryptHash, pin);
+    // Get the user number when creating the secret file
+    const userNumber = createNewSecretFile(newSecretHash, newEncryptHash, pin);
 
-    // Broadcast new user added (not just accepted)
+    // Set cookies including the user's number
+    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    res.cookie('user_number', userNumber.toString(), { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+    res.cookie('secret_count', userNumber.toString(), { secure: true, sameSite: 'lax', maxAge: 36000000000 });
+
+    // Broadcast new user added
     const message = JSON.stringify({
         type: 'newUserCreated',
         ip: req.ip
     });
     clients.forEach(client => client.send(message));
 
-    res.cookie('secret', newSecretHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
-    res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
     res.sendStatus(200);
 });
 
@@ -469,8 +459,8 @@ app.post('/verify-pin', express.json(), (req, res) => {
       const [storedHash, storedPin] = decryptedContent.split('\n');
       if (storedHash === clientSecretHash && storedPin === pin) {
         // PIN is correct, set a cookie to indicate PIN verification
- res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
-    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
+ res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 16001 });
+    res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 16000 });
     
     // Get the stored redirect URL
     const redirectUrl = '/';
@@ -491,7 +481,29 @@ app.post('/verify-pin', express.json(), (req, res) => {
 
 
 
+app.get('/api/secret-files-count', checkSessionAuth, (req, res) => {
+    const files = getSecretFiles();
+    const maxUserNumber = Math.max(...files.map(f => parseInt(f.match(/\d+/)[0])));
+    res.json({ maxUserNumber });
+});
 
+app.post('/remove-user', checkSessionAuth, (req, res) => {
+    const { userNumber } = req.body;
+    const files = getSecretFiles();
+    
+    // Remove the specified user file
+    fs.unlinkSync(`user${userNumber}.secret`);
+    
+    // Rename higher numbered files
+    files.forEach(file => {
+        const num = parseInt(file.match(/\d+/)[0]);
+        if (num > userNumber) {
+            fs.renameSync(file, `user${num-1}.secret`);
+        }
+    });
+    
+    res.json({ success: true });
+});
 
 
 app.get('/', checkSessionAuth, (req, res) => {
@@ -511,7 +523,7 @@ app.get('/', checkSessionAuth, (req, res) => {
             return res.redirect('/pin');
           } else {
             // User is fully authenticated, set a session cookie
-            res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
+          //  res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000000 });
             return res.sendFile(path.join(__dirname, 'index.html'));
           }
         }
@@ -625,6 +637,8 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
+
+
 
 
 
