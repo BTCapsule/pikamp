@@ -332,63 +332,9 @@ function promptForAccess(ip) {
 
 
 
-
-
-app.post('/remove-device', checkSessionAuth, (req, res) => {
-  const files = getSecretFiles();
-  const newFiles = [];
-
-  files.forEach(file => {
-    const match = file.match(/user(\d+)\.secret/);
-    if (match) {
-      const userNumber = parseInt(match[1]);
-      newFiles.push({ fileName: file, userNumber });
-    }
-  });
-
-  if (newFiles.length === 0) {
-    return res.status(404).json({ success: false, message: 'No new users to remove' });
-  }
-
-  // Sort files by user number to get the latest one
-  newFiles.sort((a, b) => b.userNumber - a.userNumber);
-  const latestFile = newFiles[0];
-
-  fs.unlink(latestFile.fileName, (err) => {
-    if (err) {
-      console.error(`Error removing file: ${err}`);
-      res.status(500).json({ success: false, message: 'Failed to remove user' });
-    } else {
-      // Check if the removed file matches the current user's cookies
-      const clientSecretHash = req.cookies.secret;
-      const clientEncryptHash = req.cookies.encrypt;
-      
-      let shouldLogout = false;
-
-      try {
-        const encryptedContent = fs.readFileSync(latestFile.fileName, 'utf8');
-        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
-        const [storedHash, _] = decryptedContent.split('\n');
-        
-        if (storedHash === clientSecretHash) {
-          shouldLogout = true;
-        }
-      } catch (error) {
-        // If there's an error reading the file, it's likely already deleted
-        // so we don't need to do anything here
-      }
-
-      res.json({ 
-        success: true, 
-        message: 'User removed successfully', 
-        removedUser: latestFile.userNumber,
-        remainingUsers: newFiles.length - 1,
-        action: shouldLogout ? 'logout' : 'none'
-      });
-    }
-  });
+app.get('/server.css', (req, res) => {
+  res.sendFile(path.join(__dirname, 'server.css'));
 });
-
 
 app.get('/cookies.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'cookies.js'));
@@ -517,6 +463,65 @@ app.post('/remove-user', checkSessionAuth, (req, res) => {
         });
     }
 });
+
+
+
+
+app.post('/remove-device', checkSessionAuth, (req, res) => {
+  const files = getSecretFiles();
+  const newFiles = [];
+
+  files.forEach(file => {
+    const match = file.match(/user(\d+)\.secret/);
+    if (match) {
+      const userNumber = parseInt(match[1]);
+      newFiles.push({ fileName: file, userNumber });
+    }
+  });
+
+  if (newFiles.length === 0) {
+    return res.status(404).json({ success: false, message: 'No new users to remove' });
+  }
+
+  // Sort files by user number to get the latest one
+  newFiles.sort((a, b) => b.userNumber - a.userNumber);
+  const latestFile = newFiles[0];
+
+  fs.unlink(latestFile.fileName, (err) => {
+    if (err) {
+      console.error(`Error removing file: ${err}`);
+      res.status(500).json({ success: false, message: 'Failed to remove user' });
+    } else {
+      // Check if the removed file matches the current user's cookies
+      const clientSecretHash = req.cookies.secret;
+      const clientEncryptHash = req.cookies.encrypt;
+      
+      let shouldLogout = false;
+
+      try {
+        const encryptedContent = fs.readFileSync(latestFile.fileName, 'utf8');
+        const decryptedContent = decryptData(encryptedContent, clientEncryptHash);
+        const [storedHash, _] = decryptedContent.split('\n');
+        
+        if (storedHash === clientSecretHash) {
+          shouldLogout = true;
+        }
+      } catch (error) {
+        // If there's an error reading the file, it's likely already deleted
+        // so we don't need to do anything here
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'User removed successfully', 
+        removedUser: latestFile.userNumber,
+        remainingUsers: newFiles.length - 1,
+        action: shouldLogout ? 'logout' : 'none'
+      });
+    }
+  });
+});
+
 
 app.get('/', checkSessionAuth, (req, res) => {
   const clientSecretHash = req.cookies.secret;
