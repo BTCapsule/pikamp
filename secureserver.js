@@ -391,8 +391,8 @@ app.post('/verify-pin', express.json(), (req, res) => {
           res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
           
           // Set session cookies
-          res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 16001 });
-          res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 16000 });
+          res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 3600001  });
+          res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000  });
           
           return res.json({ success: true, redirectUrl: '/' });
         }
