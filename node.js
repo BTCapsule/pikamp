@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const readline = require('readline');
-const sharp = require('sharp');
+
 
 
 const exif = require('exif-parser');
@@ -13,11 +13,6 @@ const exif = require('exif-parser');
 // Get the app instance from secureServer
 const app = secureServer.app;
 
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
 
 
 
