@@ -12,7 +12,7 @@
 
     <title>Photos</title>
 
-
+  
     <style>
     /* Global styles */
     html, body {
@@ -181,32 +181,10 @@ font-size: 26px;
 
 
 
-
-
-  .new-user-message {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    background-color: black;
-    color: white;
-    padding: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-	z-index: 3000;
-  }
-
-  .new-user-message button {
-    background-color: transparent;
-    border: none;
-    color: white;
-    cursor: pointer;
-  }
-
-
-
     </style>
+	
+	
+	<link rel="stylesheet" href="server.css">
 	
 </head>
 <body><div id="overlay" style="display: none;"></div><div id="top-overlay"></div><div id="date-display" style="position: fixed; top: 10px; left: 10px; background-color: rgba(0,0,0,0.5); color: white; padding: 5px; z-index: 1000;"></div>
@@ -270,91 +248,7 @@ font-size: 26px;
         xhr.send(formData);
     }
 	
-	
-/*	
-let ws;
 
-function connectWebSocket() {
-    ws = new WebSocket('wss://' + window.location.host);
-  
-    ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'newDevicePrompt') {
-            handleNewDevicePrompt(message.ip);
-        }
-    };
-
-    ws.onclose = () => {
-        setTimeout(connectWebSocket, 1000);
-    };
-}
-
-function handleNewDevicePrompt(ip) {
-    const allow = confirm(`Allow user with IP ${ip} to access?`);
-    ws.send(JSON.stringify({ type: 'deviceResponse', ip, allow }));
-  
-    if (allow) {
-        showNewUserMessage(ip);
-    }
-}
-
-function showNewUserMessage(ip) {
-    const message = document.createElement('div');
-    message.className = 'new-user-message';
-    message.innerHTML = `
-        <span>New user [${ip}] added</span>
-        <button onclick="dismissMessage(this.parentElement)">Dismiss</button>
-    `;
-    message.addEventListener('click', (event) => {
-        if (event.target.tagName !== 'BUTTON') {
-            promptRemoveUser(ip, message);
-        }
-    });
-    document.body.appendChild(message);
-}
-
-function dismissMessage(element) {
-    element.remove();
-}
-
-function promptRemoveUser(ip, messageElement) {
-    const userNumber = ip.split('.').join('');
-    const remove = confirm(`Remove user [${ip}]?`);
-    if (remove) {
-        fetch('/remove-device', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include' // to include cookies
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log(`Removed user${data.removedUser}`);
-                if (data.remainingUsers > 0) {
-                    console.log(`There are still ${data.remainingUsers} new user(s) that haven't been dismissed or deleted.`);
-                    // Implement logic to notify the user about remaining new users
-                }
-            } else {
-                console.error(data.message);
-            }
-        })
-        .catch(error => console.error('Error:', error));
-    }
-}
-
-
-
-
-
-
-
-	
-connectWebSocket();
-
-
-*/
 
 let loadedFiles = [];
 
