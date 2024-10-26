@@ -3,10 +3,6 @@ const path = require('path');
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
-const readline = require('readline');
-
-
-
 const exif = require('exif-parser');
 
 
