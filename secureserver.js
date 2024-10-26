@@ -54,14 +54,7 @@ function generateSelfSignedCertificate() {
   };
 }
 
-const sslCert = generateSelfSignedCertificate();
-fs.writeFileSync('server.crt', sslCert.cert);
-fs.writeFileSync('server.key', sslCert.privateKey);
 
-const httpsOptions = {
-  key: sslCert.privateKey,
-  cert: sslCert.cert
-};
 
 // Utility Functions
 function getPublicIP() {
@@ -241,9 +234,7 @@ function setupWebSocket(server) {
         case 'deviceResponse':
           handleDeviceResponse(data);
           break;
-        case 'removeUser':
-          handleRemoveUser(data);
-          break;
+
       }
     });
   });
@@ -609,12 +600,7 @@ app.get('/main', (req, res) => {
 
 
 function start() {
-  app.use(cookieParser());
-  app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+
 
   const sslCert = generateSelfSignedCertificate();
   fs.writeFileSync('server.crt', sslCert.cert);
@@ -654,7 +640,3 @@ module.exports = {
   updateSecretFile,
   checkSessionAuth
 };
-
-
-
-
