@@ -1,6 +1,3 @@
-
-
-// Common function to retrieve all cookies
 function getCookies() {
     const cookies = {};
     document.cookie.split(';').forEach(cookie => {
@@ -10,8 +7,6 @@ function getCookies() {
     return cookies;
 }
 
-// In cookies.js
-let previousSecretFileCount = 0;
 
 function checkSessionAuth() {
 	
@@ -121,7 +116,7 @@ function connectWebSocket() {
         } else if (message.type === 'deviceResponseUpdate') {
             handleDeviceResponseUpdate(message.ip, message.allow);
         } else if (message.type === 'newUserCreated') {
-            showNewUserMessage(message.ip);
+            showNewUserMessage(`user${message.userNumber}`);
         }
     };
     ws.onclose = () => {
