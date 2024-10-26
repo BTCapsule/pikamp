@@ -55,29 +55,44 @@ function showNewUserMessage(userNumber) {
         }
     });
     document.body.appendChild(message);
+    // Trigger reflow to ensure transition works
+    message.offsetHeight;
+    message.classList.add('show');
 }
 
 function dismissMessage(element) {
     const userNum = element.getAttribute('data-user-number');
     document.cookie = `user_number=${userNum}`;
-    element.remove();
+    element.classList.remove('show');
+    element.classList.add('hide');
+    // Remove element after fade completes
+    setTimeout(() => {
+        element.remove();
+    }, 500); // Match this to your CSS transition duration
 }
 
 function promptRemoveUser(userNumber, messageElement) {
     const remove = confirm(`Remove ${userNumber}?`);
     if (remove) {
-        fetch('/remove-device', {
+        fetch('/remove-user', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userNumber: parseInt(userNumber.replace('user', '')) }),
+            // Send the actual user number to remove
+            body: JSON.stringify({ 
+                userNumber: parseInt(userNumber.replace('user', '')) 
+            }),
             credentials: 'include'
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 messageElement.remove();
+                // Update cookies to reflect new state
+                document.cookie = `secret_count=${data.newCount}`;
+                // Force a session check to update notifications
+                checkSessionAuth();
             }
         });
     }
