@@ -22,8 +22,6 @@ app.use(cors({
 }));
 
 
-// Add at the top of secureserver.js
-let previousSecretFileCount = 0;
 
 // SSL Certificate Generation
 function generateSelfSignedCertificate() {
@@ -119,21 +117,7 @@ function createNewSecretFile(secretHash, encryptHash, pin = '') {
   return newUserNumber; // Return the user number
 }
 
-function checkHash(secretHash, encryptHash) {
-  const files = getSecretFiles();
-  for (const file of files) {
-    try {
-      const encryptedContent = fs.readFileSync(file, 'utf8');
-      const decryptedContent = decryptData(encryptedContent, encryptHash);
-      if (decryptedContent.split('\n')[0] === secretHash) {
-        return true;
-      }
-    } catch (error) {
-      // Silently continue to the next file
-    }
-  }
-  return false;
-}
+
 
 
 
