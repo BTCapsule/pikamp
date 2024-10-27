@@ -189,8 +189,6 @@ async function checkSessionAuth(req, res, next) {
                     fileFound = true;
                     if (pin && !req.cookies.pin_verified) {
                         return res.redirect('/pin');
-                    } else {
-                      //  res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 36000 });
                         return next();
                     }
                 }
@@ -244,8 +242,16 @@ function setupWebSocket(server) {
 
 
 function broadcastNewDevicePrompt(ip) {
+  console.log('Broadcasting to clients:', clients.size);
   const message = JSON.stringify({ type: 'newDevicePrompt', ip });
-  clients.forEach(client => client.send(message));
+  clients.forEach(client => {
+    try {
+      client.send(message);
+      console.log('Message sent successfully');
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  });
 }
 
 
@@ -284,10 +290,7 @@ function promptForAccess(ip) {
     const existingFiles = getSecretFiles();
     const isFirstUser = existingFiles.length === 0;
 
-    if (!isFirstUser) {
-      // Always broadcast to all clients
-      broadcastNewDevicePrompt(ip);
-    }
+
     
     let isResolved = false;
 
@@ -311,7 +314,11 @@ function promptForAccess(ip) {
     };
 
     pendingPrompts.set(ip, resolveOnce);
-
+    if (!isFirstUser) {
+	
+      broadcastNewDevicePrompt(ip);
+	
+    }
     // Server prompt
     rl.question(`Allow user with IP ${ip}? (y/n): `, (answer) => {
       const serverAllow = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
@@ -391,8 +398,8 @@ app.post('/verify-pin', express.json(), (req, res) => {
           res.cookie('encrypt', newEncryptHash, { secure: true, sameSite: 'lax', maxAge: 36000000000 });
           
           // Set session cookies
-          res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 3600001  });
-          res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000  });
+          res.cookie('pin_verified', 'true', { secure: true, sameSite: 'lax', maxAge: 3600001 });
+          res.cookie('session_auth', 'true', { secure: true, sameSite: 'lax', maxAge: 3600000 });
           
           return res.json({ success: true, redirectUrl: '/' });
         }
