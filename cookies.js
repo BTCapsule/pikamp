@@ -1,3 +1,41 @@
+
+// Add styles programmatically
+const styles = document.createElement('style');
+styles.textContent = `
+  .new-user-message {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background-color: black;
+    color: white;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 3000;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+  }
+  
+  .new-user-message.show {
+    opacity: 1;
+  }
+  
+  .new-user-message.hide {
+    opacity: 0;
+  }
+  
+  .new-user-message button {
+    background-color: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+  }
+`;
+document.head.appendChild(styles);
+
+
 function getCookies() {
     const cookies = {};
     document.cookie.split(';').forEach(cookie => {
