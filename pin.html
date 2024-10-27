@@ -91,7 +91,7 @@
     visibility: hidden;
 }
 
-
+<script src="/cookies.js"></script>
     </style>
 </head>
 <body>
@@ -139,6 +139,13 @@ function clearLastDigit() {
                 updatePinDots();
             }
         }
+
+function clearPin() {
+    const dots = document.querySelectorAll('.pin-dot');
+    dots.forEach(dot => dot.classList.remove('filled'));
+        pinValue = ''; // Use pinValue instead of enteredPin
+    updatePinDots(); // Make sure to update the dots
+}
 
 function updatePinDots() {
     const pinDots = document.getElementById('pin-dots');
