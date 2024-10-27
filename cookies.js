@@ -150,9 +150,13 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === 'newDevicePrompt') {
+			
+			console.log('Handling new device prompt for IP:', message.ip);
             handleNewDevicePrompt(message.ip);
         } else if (message.type === 'deviceResponseUpdate') {
+			console.log('Handling device response update:', message.ip, message.allow);
             handleDeviceResponseUpdate(message.ip, message.allow);
+			
         } else if (message.type === 'newUserCreated') {
             showNewUserMessage(`user${message.userNumber}`);
         }
@@ -163,11 +167,6 @@ function connectWebSocket() {
 }
 
 function handleNewDevicePrompt(ip) {
-    const existingPrompt = document.querySelector(`.new-user-message[data-ip="${ip}"]`);
-    if (existingPrompt) {
-        existingPrompt.remove();
-    }
-    
     const promptElement = document.createElement('div');
     promptElement.className = 'new-user-message';
     promptElement.setAttribute('data-ip', ip);
@@ -177,6 +176,9 @@ function handleNewDevicePrompt(ip) {
         <button onclick="handleDeviceResponse('${ip}', false)">Deny</button>
     `;
     document.body.appendChild(promptElement);
+    // Trigger reflow to ensure transition works
+    promptElement.offsetHeight;
+    promptElement.classList.add('show');
 }
 
 function handleDeviceResponse(ip, allow) {
@@ -211,10 +213,10 @@ function handleDeviceResponseUpdate(ip, allow) {
     }
 }
 
-
+ connectWebSocket();
 
 document.addEventListener('DOMContentLoaded', function() {
-    connectWebSocket();
+   
     if (window.location.pathname.includes('main.html')) {
         checkAccess();
     } else {
